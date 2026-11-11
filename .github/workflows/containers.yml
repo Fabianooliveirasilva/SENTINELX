@@ -49,6 +49,16 @@ jobs:
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
 
+      - name: Build scanner image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: infrastructure/docker/scanner.Dockerfile
+          tags: sentinelx/scanner:dev
+          load: true
+          cache-from: type=gha,scope=scanner
+          cache-to: type=gha,mode=max,scope=scanner
+
       - name: Build web image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -61,7 +71,7 @@ jobs:
 
       - name: Trivy image scan (fail on fixable CRITICAL)
         run: |
-          for image in sentinelx/api:dev sentinelx/web:dev; do
+          for image in sentinelx/api:dev sentinelx/scanner:dev sentinelx/web:dev; do
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.76.2 \
               image --exit-code 1 --severity CRITICAL --ignore-unfixed --no-progress "$image"
           done
@@ -81,6 +91,15 @@ jobs:
           assert result['status'] == 'ok', result
           print(result)
           "
+
+      - name: Scanner sandbox is isolated and ready
+        run: |
+          docker compose exec -T scanner sh -c 'test -z "$SENTINELX_DATABASE_URL" && test -z "$SENTINELX_SECRET_KEY"'
+          docker compose exec -T scanner nmap --version | head -1
+          docker compose exec -T scanner celery -A sentinelx_workers.scanner_app:scanner_app \
+            inspect registered --timeout 10 | grep -q sentinelx.scans.execute
+          docker compose exec -T worker celery -A sentinelx_workers.celery_app:celery_app \
+            inspect active_queues --timeout 10 | grep -q orchestrator
 
       # The throwaway credential only ever lives in a runner temp file: it is never
       # echoed, masked or exported, so it cannot appear in logs.

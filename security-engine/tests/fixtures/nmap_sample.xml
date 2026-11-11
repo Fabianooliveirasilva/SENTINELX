@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nmaprun scanner="nmap" args="nmap -sT -Pn -n --open -sV --version-light -oX - 93.184.215.14" start="1762800000" version="7.95" xmloutputversion="1.05">
+  <host starttime="1762800001" endtime="1762800010">
+    <status state="up" reason="user-set"/>
+    <address addr="93.184.215.14" addrtype="ipv4"/>
+    <ports>
+      <port protocol="tcp" portid="22"><state state="open" reason="syn-ack"/><service name="ssh" product="OpenSSH" version="9.6p1" extrainfo="Ubuntu" method="probed" conf="10"/></port>
+      <port protocol="tcp" portid="443"><state state="open" reason="syn-ack"/><service name="http" product="nginx" tunnel="ssl" method="probed" conf="10"/></port>
+      <port protocol="tcp" portid="23"><state state="open" reason="syn-ack"/><service name="telnet" method="table" conf="3"/></port>
+      <port protocol="tcp" portid="81"><state state="closed" reason="conn-refused"/><service name="hosts2-ns"/></port>
+    </ports>
+  </host>
+</nmaprun>
