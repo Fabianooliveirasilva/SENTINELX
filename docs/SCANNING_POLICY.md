@@ -1,7 +1,9 @@
 # SentinelX Scanning Policy
 
-> This policy is normative. The enforcement code is implemented in Phases 3–5;
-> until then SentinelX performs **no** network scanning of any kind.
+> This policy is normative. **Implemented (Phase 3):** asset registration rules,
+> authorization records, the deny-by-default network policy and the scope engine
+> (`security-engine/sentinelx_security/scope`). Scanner execution controls arrive
+> in Phases 4–5; until then SentinelX performs **no** network scanning.
 
 ## 1. Principles
 
@@ -26,6 +28,30 @@
   for every IP the domain resolves to (e.g. shared CDN or hosting addresses).
 * Project quotas (concurrent jobs, daily jobs) are not exceeded.
 
+## 2a. How a scope decision is made
+
+1. Parse and normalize the target (hostname, IP, `host:port` or http(s) URL).
+2. Literal IPs refused by the network policy are denied immediately, with the
+   precise reason (also for passive checks).
+3. Special-use names (`.local`, `.internal`, `.test`, …) are denied unless they are
+   inside a configured lab domain.
+4. A registered **active** asset must cover the target: exact host, IP, origin +
+   path prefix for web apps/APIs, host + port for services. Subdomains are covered
+   only when the authorization sets `include_subdomains`.
+5. An authorization must be **current** (not revoked, inside its window) and permit
+   the technique (passive / active / intrusive).
+6. Passive techniques stop here. Active and intrusive techniques resolve the host
+   once; **every** resolved address must pass the network policy **and** be
+   explicitly authorized (inside the authorization's IP ranges or registered as an
+   authorized IP asset). The resolved set is returned as the pinned address list
+   scanners must use (DNS-rebinding defense).
+7. HTTP redirects are validated hop by hop with the same procedure.
+
+Authorization constraints: window ≤ `SENTINELX_MAX_AUTHORIZATION_DAYS` (366),
+IP ranges no broader than /16 (IPv4) or /48 (IPv6) and publicly routable (or in a
+lab), intrusive testing only by administrators and only together with active
+testing (also enforced by a database constraint).
+
 ## 3. Always-blocked destinations
 
 Loopback (`127.0.0.0/8`, `::1`), unspecified (`0.0.0.0/8`, `::`), link-local
@@ -35,7 +61,13 @@ Loopback (`127.0.0.0/8`, `::1`), unspecified (`0.0.0.0/8`, `::`), link-local
 forms of any of the above, and SentinelX's own infrastructure.
 
 Private ranges may be enabled **only** for explicitly configured lab networks by
-an administrator, and never for the platform's own networks.
+an administrator (`SENTINELX_SCOPE_LAB_NETWORKS`, `SENTINELX_SCOPE_LAB_DOMAINS`),
+and never for the platform's own networks. Lab networks cannot overlap loopback,
+link-local (metadata), multicast, unspecified or reserved space.
+
+Ambiguous inputs are rejected before any lookup: numeric host forms that resolvers
+turn into IPs (`2130706433`, `0x7f.1`, `0177.0.0.1`), IPv6 zone IDs, credentials
+in URLs, wildcards and non-http(s) schemes. IDN names are compared in punycode.
 
 ## 4. Technique classes
 

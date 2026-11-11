@@ -3,7 +3,8 @@
 > **Implemented:** foundation (Phase 1) and identity, access & tenancy (Phase 2,
 > migration `0002`): `users`, `roles`, `permissions`, `role_permissions`,
 > `refresh_tokens`, `password_reset_tokens`, `projects`, `project_members`,
-> `audit_logs`. Remaining entities below are the proposal for later phases.
+> `audit_logs`; assets & scope (Phase 3, migration `0003`): `assets`,
+> `asset_authorizations`. Remaining entities below are the proposal for later phases.
 >
 > **Design change in Phase 2:** roles are assigned per user (platform-wide) and
 > project membership grants access. A per-project role override can be added to

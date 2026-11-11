@@ -1,0 +1,18 @@
+[project]
+name = "sentinelx-security"
+version = "0.3.0"
+description = "SentinelX security engine: scope enforcement and (later) scanner adapters."
+requires-python = ">=3.12,<3.13"
+license = "MIT"
+dependencies = [
+    "dnspython>=2.9.2,<3",
+    "idna>=3.20,<4",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "sentinelx_security"
+module-root = ""

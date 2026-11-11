@@ -9,7 +9,7 @@ documentation and an explicit approval before the next phase starts.
 |---|-------|------------------|--------|
 | 1 | Foundation & architecture | Monorepo, API/worker/web skeletons, PostgreSQL, Redis, Docker Compose, health checks, logging, test foundations, CI | **Delivered** |
 | 2 | Identity, access & tenancy | Users, Argon2id, access + rotating refresh tokens, session revocation, password reset, RBAC (Admin / Security Analyst / Viewer), projects, audit log, rate limiting, CSRF, login UI | **Delivered** |
-| 3 | Assets & scope enforcement | Asset inventory (domain, subdomain, IP, web app, API endpoint, service), authorization records, scope engine (DNS rebinding, private ranges, IPv6, redirects, SSRF), asset history, inventory UI | Planned |
+| 3 | Assets & scope enforcement | Asset inventory (domain, subdomain, IP, web app, API endpoint, service), authorization records, scope engine (DNS rebinding, private ranges, IPv6, redirects, SSRF), asset history, inventory UI | **Delivered** |
 | 4 | Scan orchestration & reconnaissance | Job model & states, scanner interface (`validate_scope/execute/normalize_results/handle_errors/record_evidence`), sandbox runner, DNS analyzer, passive subdomain discovery, TLS analyzer, Nmap safe profiles, technology fingerprinting | Planned |
 | 5 | Vulnerability assessment | OWASP ZAP baseline (active only with explicit authorization), Nuclei curated/pinned templates, HTTP security checks, findings normalization, evidence, lifecycle states | Planned |
 | 6 | Threat intelligence | NVD sync with rate limits and caching, CVE/CWE/CPE, version-range matching with confidence, provenance | Planned |
@@ -25,7 +25,7 @@ documentation and an explicit approval before the next phase starts.
 | Success criterion | Phase |
 |-------------------|-------|
 | Authentication and RBAC working | 2 ✅ |
-| Registration and validation of authorized assets | 3 |
+| Registration and validation of authorized assets | 3 ✅ |
 | DNS reconnaissance and TLS analysis | 4 |
 | Functional Nmap integration | 4 |
 | Functional OWASP ZAP integration | 5 |
@@ -76,19 +76,34 @@ See [AUTHENTICATION.md](AUTHENTICATION.md) for the full design. Acceptance crite
 | 10 | Append-only audit log with request correlation | `test_audit_log_is_append_only`, `test_audit_log_records_and_filters_actions` |
 | 11 | UI: login, reset, guards, users & roles, projects, audit, account; RBAC-aware navigation | Vitest suite, Playwright `auth-rbac.spec.ts` |
 
-## Phase 3 proposal — Assets & scope enforcement
+## Phase 3 — delivered
 
-* Models + migration: `assets`, `asset_authorizations`, `asset_history` (project-scoped).
-* Asset types: domain, subdomain, IP address (v4/v6), CIDR range, web application,
-  API endpoint, service; normalization (IDNA, lower-case, canonical IP forms) and
-  uniqueness per project; tags, criticality, exposure, status, scan eligibility.
-* Authorization records: authorized party, reference, validity window, permitted
-  technique classes, recorded by; history of changes; expiry handling.
-* **Scope engine** (deny-by-default, pure and exhaustively unit-tested):
-  hostname/IP parsing, special-use and private range blocklists (incl. IPv4-mapped
-  IPv6, NAT64, link-local, metadata endpoints), wildcard semantics, resolution with
-  pinning (DNS-rebinding defense), redirect validation helper, and an explicit
-  `ScopeDecision` with reasons.
-* API: CRUD for assets and authorizations, `POST /scope/check` (dry run with
-  explanation), eligibility computed server-side.
-* Frontend: asset inventory, asset details with authorization timeline, scope check tool.
+| # | Criterion | Verification |
+|---|-----------|--------------|
+| 1 | Asset types domain, subdomain, IP, web application, API endpoint, service with strict normalization (IDNA, canonical IPs, origins) and per-project uniqueness | `security-engine/tests`, `test_assets_scope.py` |
+| 2 | Internal, special-use, numeric-ambiguous and metadata targets cannot be registered | `test_unsafe_or_malformed_assets_are_rejected` |
+| 3 | Immutable authorization records (window, techniques, subdomains, IP ranges) with revocation and audit history | `test_authorization_lifecycle_and_history` |
+| 4 | Authorization limits: window, range breadth, public ranges only, intrusive = admin + active (DB constraint too) | `test_authorization_validation`, `test_database_enforces_authorization_invariants` |
+| 5 | Deny-by-default scope engine: no domain-implies-IP assumption, DNS-rebinding, IPv4-in-IPv6, redirects, lab networks | `test_engine.py` (139 engine tests) |
+| 6 | `POST /projects/{id}/scope/check` explains every decision; rate limited; project isolated | `test_scope_check_*` |
+| 7 | UI: inventory, asset detail with eligibility, authorizations and history, scope check tool | Vitest `assets.test.tsx`, Playwright `assets-scope.spec.ts` |
+
+**Design notes.** CIDR *assets* were left out on purpose: authorizations carry IP
+ranges, but assets are concrete hosts so that scans never fan out over whole
+networks. Asset history is served from the append-only audit log rather than a
+second history table.
+
+## Phase 4 proposal — Scan orchestration & reconnaissance
+
+* `scan_jobs` / `scan_results` models; job states (pending → queued → running →
+  completed | failed | cancelled) persisted in PostgreSQL; `202 + job_id` API.
+* Scanner interface `validate_scope / execute / normalize_results / handle_errors /
+  record_evidence`; every execution re-runs the scope engine and uses the pinned
+  addresses.
+* Sandbox runner: short-lived, non-root containers on a dedicated egress network
+  limited to pinned targets; CPU/memory/time limits; no secrets.
+* Scanners: DNS analyzer (dnspython), passive subdomain discovery (certificate
+  transparency) with provenance, TLS analyzer, Nmap with safe server-side profiles
+  (TCP connect, bounded ports, no intrusive NSE), technology fingerprinting.
+* Per-project concurrency quotas and an emergency stop; UI for scan configuration
+  and execution details. All adapters tested with recorded fixtures.

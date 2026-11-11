@@ -33,7 +33,7 @@ format: ## Auto-format backend code
 	$(UV) run ruff format .
 
 typecheck: ## Static type checks (mypy strict + tsc)
-	$(UV) run mypy apps/api/app apps/api/tests apps/api/migrations workers
+	$(UV) run mypy apps/api/app apps/api/tests apps/api/migrations workers security-engine
 	cd $(WEB) && $(PNPM) typecheck
 
 test: ## Unit/API tests (no infrastructure required)
@@ -50,7 +50,7 @@ test-e2e: ## Playwright E2E against a running stack (E2E_BASE_URL, default :8080
 	cd $(WEB) && $(PNPM) test:e2e
 
 security: ## Local security checks (bandit, pip-audit, pnpm audit)
-	$(UV) run bandit -q -c pyproject.toml -r apps/api/app workers/sentinelx_workers
+	$(UV) run bandit -q -c pyproject.toml -r apps/api/app workers/sentinelx_workers security-engine/sentinelx_security
 	$(UV) export --frozen --all-packages --no-dev --no-emit-workspace --format requirements.txt -o .requirements-audit.txt -q
 	$(UV) run pip-audit --strict --disable-pip --require-hashes -r .requirements-audit.txt; rc=$$?; rm -f .requirements-audit.txt; exit $$rc
 	cd $(WEB) && $(PNPM) audit --audit-level high

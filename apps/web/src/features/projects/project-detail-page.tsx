@@ -29,6 +29,7 @@ import {
   type Project,
 } from "./api";
 import { ProjectForm } from "./project-form";
+import { ProjectTabs } from "./project-tabs";
 
 function AddMemberForm({ projectId, memberIds }: { projectId: string; memberIds: Set<string> }) {
   const [userId, setUserId] = useState("");
@@ -243,6 +244,7 @@ export function ProjectDetailPage() {
     <div className="space-y-6">
       {back}
       <PageHeader title={data.name} description={data.description || "No description."} />
+      <ProjectTabs projectId={data.id} />
       {canManage ? (
         <Card>
           <CardHeader>

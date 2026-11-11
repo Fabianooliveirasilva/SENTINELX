@@ -15,6 +15,9 @@ from urllib.parse import urlsplit
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from sentinelx_security.scope.network_policy import parse_lab_networks
+from sentinelx_security.scope.targets import TargetError, normalize_hostname, parse_ip
+
 _INSECURE_SECRET_MARKERS = ("change-me", "changeme", "insecure", "example")
 
 
@@ -83,15 +86,32 @@ class Settings(BaseSettings):
     frontend_base_url: str = "http://localhost:8080"
     email_backend: Literal["console", "disabled"] = "console"
 
+    # --- Scope enforcement ------------------------------------------------------
+    # Private networks / internal domains of intentionally vulnerable labs that may
+    # be registered and tested. Loopback, link-local and metadata stay blocked.
+    scope_lab_networks: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    scope_lab_domains: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    dns_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
+    dns_nameservers: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    max_authorization_days: int = Field(default=366, ge=1, le=3660)
+
     # --- Rate limits (requests per window) --------------------------------------
     rate_limit_login_per_minute: int = Field(default=10, ge=1)
     rate_limit_refresh_per_minute: int = Field(default=60, ge=1)
     rate_limit_password_reset_per_hour: int = Field(default=5, ge=1)
     rate_limit_register_per_hour: int = Field(default=5, ge=1)
+    rate_limit_scope_check_per_minute: int = Field(default=30, ge=1)
 
     # ------------------------------------------------------------------ validators
 
-    @field_validator("cors_allowed_origins", "allowed_hosts", mode="before")
+    @field_validator(
+        "cors_allowed_origins",
+        "allowed_hosts",
+        "scope_lab_networks",
+        "scope_lab_domains",
+        "dns_nameservers",
+        mode="before",
+    )
     @classmethod
     def _parse_csv(cls, value: object) -> object:
         return _split_csv(value)
@@ -117,6 +137,27 @@ class Settings(BaseSettings):
         if "*" in hosts:
             raise ValueError("wildcard '*' is not permitted in allowed_hosts")
         return hosts
+
+    @field_validator("scope_lab_networks")
+    @classmethod
+    def _validate_lab_networks(cls, values: list[str]) -> list[str]:
+        return [str(network) for network in parse_lab_networks(values)]
+
+    @field_validator("scope_lab_domains")
+    @classmethod
+    def _validate_lab_domains(cls, values: list[str]) -> list[str]:
+        try:
+            return [normalize_hostname(v) for v in values]
+        except TargetError as exc:
+            raise ValueError(f"invalid lab domain: {exc.message}") from exc
+
+    @field_validator("dns_nameservers")
+    @classmethod
+    def _validate_nameservers(cls, values: list[str]) -> list[str]:
+        try:
+            return [parse_ip(v).compressed for v in values]
+        except TargetError as exc:
+            raise ValueError("dns_nameservers must be IP addresses") from exc
 
     @field_validator("frontend_base_url")
     @classmethod

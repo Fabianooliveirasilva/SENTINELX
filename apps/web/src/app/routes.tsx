@@ -2,9 +2,12 @@ import type { RouteObject } from "react-router";
 
 import {
   AccountRoute,
+  AssetDetailRoute,
+  AssetsRoute,
   AuditLogsRoute,
   ProjectDetailRoute,
   ProjectsRoute,
+  ScopeCheckRoute,
   UsersRoute,
 } from "@/app/lazy-pages";
 import { NotFoundPage } from "@/app/not-found-page";
@@ -46,6 +49,30 @@ export const routes: RouteObject[] = [
             element: (
               <RequirePermission permission="projects:read">
                 <ProjectDetailRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/assets",
+            element: (
+              <RequirePermission permission="assets:read">
+                <AssetsRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/assets/:assetId",
+            element: (
+              <RequirePermission permission="assets:read">
+                <AssetDetailRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/scope",
+            element: (
+              <RequirePermission permission="assets:read">
+                <ScopeCheckRoute />
               </RequirePermission>
             ),
           },

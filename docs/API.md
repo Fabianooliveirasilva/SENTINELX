@@ -79,12 +79,25 @@ Readiness probe; checks PostgreSQL and Redis concurrently with a timeout.
 | `POST /projects/{id}/members` · `DELETE …/{user_id}` | `projects:manage` | |
 | `GET /audit-logs` · `GET /audit-logs/actions` | `audit:read` | Filters: `action`, `actor_id`, `project_id`, `outcome`, `since`, `until` |
 
+### Assets & scope (Phase 3)
+
+| Method & path | Permission | Notes |
+|---------------|------------|-------|
+| `GET /projects/{id}/assets` | `assets:read` | Filters: `type`, `status`, `criticality`, `tag`, `search` |
+| `POST /projects/{id}/assets` | `assets:write` | Normalized; internal/special-use targets rejected; 409 on duplicates |
+| `GET /projects/{id}/assets/{asset_id}` | `assets:read` | Includes eligibility and authorizations |
+| `PATCH /projects/{id}/assets/{asset_id}` | `assets:write` | Description, tags, criticality, exposure, status (type/value immutable) |
+| `GET /projects/{id}/assets/{asset_id}/history` | `assets:read` | From the audit log |
+| `POST /projects/{id}/assets/{asset_id}/authorizations` | `assets:write` | Intrusive requires admin |
+| `POST /projects/{id}/assets/{asset_id}/authorizations/{auth_id}/revoke` | `assets:write` | Reason required |
+| `POST /projects/{id}/scope/check` | `assets:read` | `{target, technique}` → decision with reasons and per-address verdicts; rate limited |
+
 Authentication: `Authorization: Bearer <access_token>`. `401` responses include
 `WWW-Authenticate: Bearer`; `429` responses include `Retry-After`. Details in
 [AUTHENTICATION.md](AUTHENTICATION.md).
 
 ## Planned resources
 
-`/assets`, `/scans`, `/findings`,
+`/scans`, `/findings`,
 `/intelligence`, `/events`, `/reports`, `/ai`, `/settings` —
 introduced phase by phase (see [ROADMAP.md](ROADMAP.md)).

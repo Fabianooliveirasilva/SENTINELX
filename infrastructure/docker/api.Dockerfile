@@ -28,12 +28,14 @@ WORKDIR /src
 COPY pyproject.toml uv.lock .python-version ./
 COPY apps/api/pyproject.toml apps/api/pyproject.toml
 COPY workers/pyproject.toml workers/pyproject.toml
+COPY security-engine/pyproject.toml security-engine/pyproject.toml
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --all-packages --no-install-workspace
 
 # Application layer.
 COPY apps/api apps/api
 COPY workers workers
+COPY security-engine security-engine
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --all-packages --no-editable
 

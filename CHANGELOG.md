@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-11-11 — Phase 3: Assets & scope enforcement
+
+### Added
+- `security-engine` workspace package (`sentinelx-security`) with the scope engine:
+  strict target parsing (IDNA, canonical IPs, URLs, host:port; rejects numeric-host
+  forms, zone IDs, credentials, wildcards), deny-by-default network policy
+  (loopback, private, link-local, metadata, multicast, reserved; IPv4 embedded in
+  IPv6 via mapped/compatible/NAT64/6to4/Teredo), DNS resolution with pinning,
+  explained decisions per address, per-hop redirect validation, lab networks/domains.
+- Assets (domain, subdomain, IP, web application, API endpoint, service) with
+  normalization, tags, criticality, exposure, archive/restore and eligibility.
+- Immutable authorization records with validity windows, technique flags,
+  subdomain coverage and bounded IP ranges; revocation with reason; DB constraints.
+- Asset history from the audit log; `POST /projects/{id}/scope/check`.
+- Frontend: project tabs, asset inventory, asset detail (eligibility,
+  authorizations, history) and scope check tool.
+
 ## [0.2.0] — 2026-11-11 — Phase 2: Identity, access & tenancy
 
 ### Added

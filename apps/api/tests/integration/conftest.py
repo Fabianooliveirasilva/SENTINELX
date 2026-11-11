@@ -29,10 +29,13 @@ from app.main import create_app
 from app.models import User
 from app.repositories.users import UserRepository
 from app.services.email import EmailMessage
+from sentinelx_security.scope import NetworkPolicy, ScopeEngine, StaticResolver, parse_lab_networks
 
 ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
 TENANT_TABLES = (
     "audit_logs",
+    "asset_authorizations",
+    "assets",
     "password_reset_tokens",
     "refresh_tokens",
     "project_members",
@@ -40,6 +43,15 @@ TENANT_TABLES = (
     "users",
 )
 DEFAULT_PASSWORD = "correct-horse-battery-staple"
+
+# Deterministic DNS for scope tests (no network access in the test suite).
+TEST_DNS = {
+    "example.com": ["93.184.215.14"],
+    "www.example.com": ["93.184.215.14"],
+    "cdn.example.com": ["151.101.1.1"],
+    "rebind.example.com": ["93.184.215.14", "127.0.0.1"],
+    "juice.lab.example.com": ["10.20.0.5"],
+}
 
 
 class MemoryEmailSender:
@@ -61,6 +73,7 @@ def integration_settings(**overrides: Any) -> Settings:
         "rate_limit_password_reset_per_hour": 1000,
         "rate_limit_register_per_hour": 1000,
         "rate_limit_refresh_per_minute": 1000,
+        "rate_limit_scope_check_per_minute": 5,
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)
@@ -138,6 +151,11 @@ async def stack(migrated_database: None, stack_settings: Settings) -> AsyncItera
     app = create_app(stack_settings)
     async with app.router.lifespan_context(app):
         app.state.redis = FakeAsyncRedis()
+        app.state.scope_engine = ScopeEngine(
+            NetworkPolicy(parse_lab_networks(stack_settings.scope_lab_networks)),
+            StaticResolver(TEST_DNS),
+            lab_domains=stack_settings.scope_lab_domains,
+        )
         email = MemoryEmailSender()
         app.state.email_sender = email
         transport = httpx.ASGITransport(app=app)
