@@ -31,10 +31,69 @@ class AppError(Exception):
     status_code: int = HTTPStatus.BAD_REQUEST
     code: str = "bad_request"
 
-    def __init__(self, message: str, *, details: list[ErrorDetail] | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        details: list[ErrorDetail] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> None:
         super().__init__(message)
         self.message = message
         self.details = details or []
+        self.headers = headers
+
+
+class AuthenticationError(AppError):
+    status_code = HTTPStatus.UNAUTHORIZED
+    code = "not_authenticated"
+
+    def __init__(self, message: str = "Authentication required.") -> None:
+        super().__init__(message, headers={"WWW-Authenticate": "Bearer"})
+
+
+class PermissionDeniedError(AppError):
+    status_code = HTTPStatus.FORBIDDEN
+    code = "permission_denied"
+
+    def __init__(self, message: str = "You do not have permission to perform this action.") -> None:
+        super().__init__(message)
+
+
+class NotFoundError(AppError):
+    status_code = HTTPStatus.NOT_FOUND
+    code = "not_found"
+
+
+class ConflictError(AppError):
+    status_code = HTTPStatus.CONFLICT
+    code = "conflict"
+
+
+class InvalidRequestError(AppError):
+    """A syntactically valid request that violates a business rule."""
+
+    status_code = _HTTP_422
+    code = "invalid_request"
+
+
+class CsrfError(AppError):
+    status_code = HTTPStatus.FORBIDDEN
+    code = "csrf_failed"
+
+    def __init__(self) -> None:
+        super().__init__("CSRF validation failed.")
+
+
+class RateLimitedError(AppError):
+    status_code = HTTPStatus.TOO_MANY_REQUESTS
+    code = "rate_limited"
+
+    def __init__(self, retry_after_seconds: int) -> None:
+        super().__init__(
+            "Too many requests. Please try again later.",
+            headers={"Retry-After": str(max(1, retry_after_seconds))},
+        )
 
 
 def _request_id(request: Request) -> str | None:
@@ -80,6 +139,7 @@ async def _handle_app_error(request: Request, exc: AppError) -> JSONResponse:
         code=exc.code,
         message=exc.message,
         details=exc.details,
+        headers=exc.headers,
     )
 
 

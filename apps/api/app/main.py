@@ -19,9 +19,12 @@ from app.api.v1.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
+from app.core.security.passwords import PasswordService
+from app.core.security.tokens import AccessTokenService
 from app.db.session import create_engine, create_session_factory
 from app.middleware.request_context import REQUEST_ID_HEADER, RequestContextMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
+from app.services.email import build_email_sender
 from app.services.health import DatabaseHealthCheck, HealthService, RedisHealthCheck
 
 logger = get_logger(__name__)
@@ -72,6 +75,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url="/api/openapi.json" if settings.docs_enabled else None,
     )
     app.state.settings = settings
+    app.state.password_service = PasswordService(settings)
+    app.state.access_token_service = AccessTokenService(settings)
+    app.state.email_sender = build_email_sender(settings)
 
     register_exception_handlers(app)
 

@@ -8,7 +8,7 @@ documentation and an explicit approval before the next phase starts.
 | # | Phase | Key deliverables | Status |
 |---|-------|------------------|--------|
 | 1 | Foundation & architecture | Monorepo, API/worker/web skeletons, PostgreSQL, Redis, Docker Compose, health checks, logging, test foundations, CI | **Delivered** |
-| 2 | Identity, access & tenancy | Users, Argon2id, access + rotating refresh tokens, session revocation, password reset, RBAC (Admin / Security Analyst / Viewer), projects, audit log foundation, rate limiting, CSRF, login UI | Planned |
+| 2 | Identity, access & tenancy | Users, Argon2id, access + rotating refresh tokens, session revocation, password reset, RBAC (Admin / Security Analyst / Viewer), projects, audit log, rate limiting, CSRF, login UI | **Delivered** |
 | 3 | Assets & scope enforcement | Asset inventory (domain, subdomain, IP, web app, API endpoint, service), authorization records, scope engine (DNS rebinding, private ranges, IPv6, redirects, SSRF), asset history, inventory UI | Planned |
 | 4 | Scan orchestration & reconnaissance | Job model & states, scanner interface (`validate_scope/execute/normalize_results/handle_errors/record_evidence`), sandbox runner, DNS analyzer, passive subdomain discovery, TLS analyzer, Nmap safe profiles, technology fingerprinting | Planned |
 | 5 | Vulnerability assessment | OWASP ZAP baseline (active only with explicit authorization), Nuclei curated/pinned templates, HTTP security checks, findings normalization, evidence, lifecycle states | Planned |
@@ -24,7 +24,7 @@ documentation and an explicit approval before the next phase starts.
 
 | Success criterion | Phase |
 |-------------------|-------|
-| Authentication and RBAC working | 2 |
+| Authentication and RBAC working | 2 ✅ |
 | Registration and validation of authorized assets | 3 |
 | DNS reconnaissance and TLS analysis | 4 |
 | Functional Nmap integration | 4 |
@@ -58,19 +58,37 @@ documentation and an explicit approval before the next phase starts.
 | 11 | CI: lint, types, tests, build, secret scanning, SAST, dependency audit, image scan, compose smoke + E2E | `.github/workflows/` |
 | 12 | Documentation: architecture, roadmap, database proposal, threat model, scanning policy, security, testing, deployment | `docs/` |
 
-## Phase 2 proposal — Identity, access & tenancy
+## Phase 2 — delivered
 
-* Models + migrations: `users`, `roles`, `permissions`, `role_permissions`,
-  `refresh_tokens`, `projects`, `project_members`, `audit_logs`.
-* Argon2id (`argon2-cffi`) with OWASP-recommended parameters; constant-time
-  verification; transparent rehash on parameter change.
-* Short-lived JWT access tokens (≈10 min) in memory; opaque refresh tokens stored
-  hashed, rotated on every use with reuse detection (family revocation), delivered
-  as `HttpOnly; Secure; SameSite=Strict` cookies; CSRF double-submit for
-  cookie-authenticated endpoints.
-* Permission-based authorization dependencies (`require_permission("assets:write")`)
-  scoped by project membership; deny-by-default; privilege-escalation tests.
-* Redis-backed rate limiting for auth endpoints; account lockout with back-off.
-* Password reset with single-use, hashed, expiring tokens (email delivery behind
-  the notification abstraction; console sink in development).
-* Frontend: login, session handling, route guards, user & role management.
+See [AUTHENTICATION.md](AUTHENTICATION.md) for the full design. Acceptance criteria:
+
+| # | Criterion | Verification |
+|---|-----------|--------------|
+| 1 | Argon2id hashing, password policy, uniform timing for unknown accounts | `tests/unit/test_security_primitives.py`, `test_auth.py` |
+| 2 | Short-lived access tokens; invalid/expired/`alg=none`/wrong-audience tokens rejected | `test_auth.py::test_invalid_access_tokens_are_rejected` |
+| 3 | Refresh rotation with reuse detection revoking the session family | `test_refresh_token_reuse_revokes_the_whole_session` |
+| 4 | CSRF on cookie-authenticated endpoints, bound to the session | `test_refresh_requires_matching_csrf_token`, `test_csrf_token_is_bound_to_its_session` |
+| 5 | Logout, session listing/revocation, forced sign-out, immediate invalidation on password change / deactivation | `test_auth.py`, `test_rbac_users.py` |
+| 6 | Password reset: single use, expiring, no account enumeration | `test_password_reset_*` |
+| 7 | Lockout and rate limiting with `Retry-After` | `test_account_locks_after_repeated_failures`, `TestLoginRateLimit` |
+| 8 | Server-side RBAC for every endpoint; DB seed equals code catalog; no mass assignment | `test_rbac_users.py` |
+| 9 | Project isolation: non-members get 404; membership management | `test_projects_audit.py` |
+| 10 | Append-only audit log with request correlation | `test_audit_log_is_append_only`, `test_audit_log_records_and_filters_actions` |
+| 11 | UI: login, reset, guards, users & roles, projects, audit, account; RBAC-aware navigation | Vitest suite, Playwright `auth-rbac.spec.ts` |
+
+## Phase 3 proposal — Assets & scope enforcement
+
+* Models + migration: `assets`, `asset_authorizations`, `asset_history` (project-scoped).
+* Asset types: domain, subdomain, IP address (v4/v6), CIDR range, web application,
+  API endpoint, service; normalization (IDNA, lower-case, canonical IP forms) and
+  uniqueness per project; tags, criticality, exposure, status, scan eligibility.
+* Authorization records: authorized party, reference, validity window, permitted
+  technique classes, recorded by; history of changes; expiry handling.
+* **Scope engine** (deny-by-default, pure and exhaustively unit-tested):
+  hostname/IP parsing, special-use and private range blocklists (incl. IPv4-mapped
+  IPv6, NAT64, link-local, metadata endpoints), wildcard semantics, resolution with
+  pinning (DNS-rebinding defense), redirect validation helper, and an explicit
+  `ScopeDecision` with reasons.
+* API: CRUD for assets and authorizations, `POST /scope/check` (dry run with
+  explanation), eligibility computed server-side.
+* Frontend: asset inventory, asset details with authorization timeline, scope check tool.

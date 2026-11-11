@@ -42,7 +42,7 @@ jobs:
         run: uv run mypy apps/api/app apps/api/tests apps/api/migrations workers
 
   backend-tests:
-    name: Backend · unit & API tests
+    name: Backend · unit & API tests (no infrastructure)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -55,16 +55,10 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
       - run: uv sync --all-packages
-      - run: uv run pytest --cov --cov-report=term-missing --cov-report=xml
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with:
-          name: backend-coverage
-          path: coverage.xml
-          retention-days: 7
+      - run: uv run pytest
 
   backend-integration:
-    name: Backend · integration (PostgreSQL + Redis)
+    name: Backend · full suite + coverage gate (PostgreSQL + Redis)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     services:
@@ -109,7 +103,14 @@ jobs:
       - name: Verify downgrade/upgrade round trip
         working-directory: apps/api
         run: uv run alembic downgrade base && uv run alembic upgrade head
-      - run: uv run pytest -m integration
+      - name: Full test suite with coverage gate
+        run: uv run pytest -m "" --cov --cov-report=term-missing --cov-report=xml
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: backend-coverage
+          path: coverage.xml
+          retention-days: 7
 
   frontend:
     name: Frontend · lint, types, tests, build

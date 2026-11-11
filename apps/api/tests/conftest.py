@@ -41,6 +41,16 @@ def build_settings(**overrides: Any) -> Settings:
     return Settings(_env_file=None, **values)
 
 
+def build_production_settings(**overrides: Any) -> Settings:
+    values: dict[str, Any] = {
+        "environment": "production",
+        "secret_key": "a" * 48,
+        "email_backend": "disabled",
+    }
+    values.update(overrides)
+    return build_settings(**values)
+
+
 @pytest.fixture
 def settings() -> Settings:
     return build_settings()

@@ -50,13 +50,36 @@ E2E_BASE_URL=http://127.0.0.1:5173 make test-e2e
 * Frontend tests use accessible queries (`getByRole`, labels) to keep
   components accessible by construction.
 
-## Phase 1 results (local run, 2026-11-10)
+## Running integration tests without Docker
+
+Integration tests need a real PostgreSQL. Any reachable instance works:
+
+```bash
+export SENTINELX_DATABASE_URL=postgresql+asyncpg://user:pass@127.0.0.1:5432/sentinelx
+export SENTINELX_REDIS_URL=redis://127.0.0.1:6379/0
+export SENTINELX_SECRET_KEY=local-test-secret-key-at-least-32-chars
+make test-all
+```
+
+Fixtures apply migrations once per session and truncate tenant tables before each
+test (RBAC seed rows are preserved). Redis-dependent behavior in API tests uses
+`fakeredis`; the two tests that need a real Redis run in CI.
+
+> Integration tests **truncate** the database they point at. Never run them
+> against a database holding data you want to keep.
+
+## Latest results (Phase 2, local run 2026-11-11)
 
 | Suite | Result |
 |-------|--------|
-| Backend unit + API (pytest) | 43 passed, coverage 96% |
-| Frontend (Vitest) | 15 passed |
-| E2E (Playwright, local API + Vite, no DB/Redis → "Degraded" path) | 2 passed |
-| Ruff / mypy strict / ESLint (strict type-checked) / tsc | clean |
-| Bandit / Semgrep (280 rules) / Gitleaks / pip-audit / pnpm audit | 0 findings |
-| Integration tests, `docker compose` smoke, Trivy | **Not run locally** (Docker unavailable on the development host); executed by CI |
+| Backend unit + API (no infrastructure) | 75 passed |
+| Backend full suite (unit + integration, PostgreSQL 16 local) | 142 passed, 2 deselected (need real Redis), coverage 97% |
+| Frontend (Vitest) | 38 passed |
+| E2E (Playwright, Chromium, real API + PostgreSQL) | 7 passed |
+| Ruff / mypy strict / ESLint strict / tsc | clean |
+| Bandit / Semgrep / Gitleaks / pip-audit / pnpm audit | 0 findings |
+| Docker build, compose smoke, Trivy | CI only (Docker unavailable on the development host) |
+
+## Phase 1 results (2026-11-10)
+
+Backend 43 passed (96% coverage), frontend 15, E2E 2; all static and security checks clean.

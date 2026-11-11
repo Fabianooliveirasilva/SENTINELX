@@ -11,12 +11,15 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from redis.asyncio import Redis
 from sqlalchemy import text
 
 from app.core.config import Settings
 from app.db.session import create_engine
 from app.main import create_app
+from tests.integration.conftest import ALEMBIC_INI
 
 pytestmark = pytest.mark.integration
 
@@ -32,7 +35,8 @@ async def test_postgres_accepts_queries_and_migrations_applied(real_settings: Se
         async with engine.connect() as connection:
             assert (await connection.execute(text("SELECT 1"))).scalar_one() == 1
             version = await connection.execute(text("SELECT version_num FROM alembic_version"))
-            assert version.scalar_one() == "0001"
+            head = ScriptDirectory.from_config(Config(str(ALEMBIC_INI))).get_current_head()
+            assert version.scalar_one() == head
     finally:
         await engine.dispose()
 

@@ -22,7 +22,10 @@ The threat analysis behind these controls is in [THREAT_MODEL.md](THREAT_MODEL.m
 | Container hardening (non-root, `cap_drop: ALL`, `no-new-privileges`, read-only FS, resource limits) | Implemented | `docker-compose.yml`, Dockerfiles |
 | Network segmentation (internal backend network, localhost-only published ports) | Implemented | `docker-compose.yml` |
 | Secret scanning, SAST, dependency audit, image scanning in CI | Implemented | `.github/workflows/` |
-| Argon2id, token management, RBAC, CSRF, rate limiting, audit logs | Planned | Phase 2 |
+| Argon2id, rotating refresh tokens with reuse detection, RBAC, CSRF, lockout, rate limiting, append-only audit log | Implemented | [AUTHENTICATION.md](AUTHENTICATION.md) |
+| Tenant isolation (project-scoped queries, 404 for foreign resources) | Implemented | `app/repositories/projects.py` |
+| Trusted proxy configuration (client IP from Nginx only) | Implemented | `docker-compose.yml` (`FORWARDED_ALLOW_IPS`) |
+| Multi-factor authentication, production email backend | Planned | Phase 12 |
 | SSRF/scope enforcement, DNS rebinding and redirect defenses | Planned | Phase 3 |
 | Scanner sandboxing and egress restriction | Planned | Phase 4 |
 | AI prompt-injection defenses and data minimization | Planned | Phase 9 |

@@ -2,11 +2,12 @@
 #
 #   make env      # generate .env with random secrets (first time only)
 #   make up       # build and start everything
+#   make admin    # create the first administrator
 #   open http://localhost:8080
 #
 # Network design:
 #   backend  (internal: no outbound internet) -> postgres, redis, migrate, api, worker
-#   frontend (bridge)                          -> web, api
+#   frontend (bridge, 172.30.10.0/24)          -> web (fixed IP), api
 # Only the web (8080) and API (8000) ports are published, and only on 127.0.0.1.
 
 name: sentinelx
@@ -31,7 +32,7 @@ x-app: &app
   tmpfs:
     - /tmp:size=64m
   cap_drop: [ALL]
-  environment:
+  environment: &app-env
     SENTINELX_ENVIRONMENT: ${SENTINELX_ENVIRONMENT:-development}
     SENTINELX_LOG_LEVEL: ${SENTINELX_LOG_LEVEL:-INFO}
     SENTINELX_LOG_JSON: "true"
@@ -42,6 +43,9 @@ x-app: &app
     SENTINELX_CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/2
     SENTINELX_ALLOWED_HOSTS: localhost,127.0.0.1,api
     SENTINELX_CORS_ALLOWED_ORIGINS: ${SENTINELX_CORS_ALLOWED_ORIGINS:-}
+    SENTINELX_FRONTEND_BASE_URL: ${SENTINELX_FRONTEND_BASE_URL:-http://localhost:8080}
+    SENTINELX_EMAIL_BACKEND: ${SENTINELX_EMAIL_BACKEND:-console}
+    SENTINELX_ALLOW_SELF_REGISTRATION: ${SENTINELX_ALLOW_SELF_REGISTRATION:-false}
 
 services:
   postgres:
@@ -96,6 +100,11 @@ services:
 
   api:
     <<: *app
+    environment:
+      <<: *app-env
+      # Trust X-Forwarded-For only from the Nginx container, so client IPs used for
+      # rate limiting and audit logs cannot be spoofed by direct callers.
+      FORWARDED_ALLOW_IPS: 172.30.10.10
     ports:
       - "127.0.0.1:8000:8000"
     networks: [backend, frontend]
@@ -153,7 +162,9 @@ services:
     cap_drop: [ALL]
     ports:
       - "127.0.0.1:8080:8080"
-    networks: [frontend]
+    networks:
+      frontend:
+        ipv4_address: 172.30.10.10
     depends_on:
       api: { condition: service_healthy }
     healthcheck:
@@ -168,7 +179,10 @@ services:
 networks:
   backend:
     internal: true
-  frontend: {}
+  frontend:
+    ipam:
+      config:
+        - subnet: 172.30.10.0/24
 
 volumes:
   postgres-data: {}

@@ -23,6 +23,7 @@ dev = [
     "mypy>=2.4.1",
     "bandit[toml]>=1.9.4",
     "pip-audit>=2.10.1",
+    "fakeredis>=2.40.0",
 ]
 
 # ---------------------------------------------------------------------------
@@ -90,6 +91,9 @@ filterwarnings = ["error"]
 [tool.coverage.run]
 source = ["apps/api/app", "workers/sentinelx_workers"]
 branch = true
+# Async SQLAlchemy drives database calls through greenlets; without this, code
+# that resumes after awaited queries is not attributed and coverage under-reports.
+concurrency = ["thread", "greenlet"]
 
 [tool.coverage.report]
 show_missing = true

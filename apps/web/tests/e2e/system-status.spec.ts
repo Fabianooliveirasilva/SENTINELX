@@ -1,11 +1,13 @@
 import { expect, test } from "@playwright/test";
 
+import { ADMIN_EMAIL, ADMIN_PASSWORD, signIn } from "./helpers";
+
 /**
  * Smoke test against a running stack. With E2E_EXPECT_OPERATIONAL=1 (CI with
  * docker compose) the platform must report every dependency as operational.
  */
 test("system status page reflects real backend readiness", async ({ page }) => {
-  await page.goto("/");
+  await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD);
 
   await expect(page.getByRole("heading", { name: "System Status" })).toBeVisible();
   const overall = page.getByTestId("overall-status");
@@ -21,6 +23,7 @@ test("system status page reflects real backend readiness", async ({ page }) => {
 });
 
 test("unknown routes render the 404 page", async ({ page }) => {
+  await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD);
   await page.goto("/definitely-not-a-page");
 
   await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();

@@ -37,12 +37,14 @@ typecheck: ## Static type checks (mypy strict + tsc)
 	cd $(WEB) && $(PNPM) typecheck
 
 test: ## Unit/API tests (no infrastructure required)
-	$(UV) run pytest --cov
+	$(UV) run pytest
 	cd $(WEB) && $(PNPM) test
 
 test-integration: ## Integration tests (needs PostgreSQL + Redis via SENTINELX_* env)
-	cd apps/api && $(UV) run alembic upgrade head
 	$(UV) run pytest -m integration
+
+test-all: ## Full backend suite with the coverage gate (needs PostgreSQL + Redis)
+	$(UV) run pytest -m "" --cov
 
 test-e2e: ## Playwright E2E against a running stack (E2E_BASE_URL, default :8080)
 	cd $(WEB) && $(PNPM) test:e2e
@@ -67,7 +69,7 @@ dev-web: ## Run the Vite dev server (proxies /api to 127.0.0.1:8000)
 	cd $(WEB) && $(PNPM) dev
 
 # --------------------------------------------------------------------------- docker
-.PHONY: up down logs ps build smoke clean
+.PHONY: up down logs ps build smoke clean admin
 build: ## Build container images
 	$(COMPOSE) build
 
@@ -82,6 +84,9 @@ logs: ## Follow logs from all services
 
 ps: ## Show service status
 	$(COMPOSE) ps
+
+admin: ## Create the first administrator (prompts for email and password)
+	@read -p "Admin email: " email; $(COMPOSE) exec api sentinelx-admin create-admin --email "$$email"
 
 smoke: ## Verify the running stack end to end (readiness through Nginx + worker task)
 	@curl -fsS http://127.0.0.1:8080/api/v1/health/ready && echo

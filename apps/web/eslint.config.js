@@ -28,6 +28,8 @@ export default defineConfig([
       "@typescript-eslint/consistent-type-imports": "error",
       "@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true }],
       "no-console": ["error", { allow: ["warn", "error"] }],
+      // React Hook Form's handleSubmit returns a promise for onSubmit handlers by design.
+      "@typescript-eslint/no-misused-promises": ["error", { checksVoidReturn: { attributes: false } }],
     },
   },
   {
