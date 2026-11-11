@@ -12,11 +12,13 @@ from app.core.config import Settings
 from app.core.context import RequestMeta
 from app.core.security.passwords import PasswordService
 from app.core.security.tokens import AccessTokenService
+from app.services.assets import AssetService
 from app.services.auth import AuthService
 from app.services.email import EmailSender
 from app.services.projects import ProjectService
 from app.services.rate_limit import RateLimiter
 from app.services.users import UserService
+from sentinelx_security.scope import ScopeEngine
 
 _MAX_USER_AGENT = 256
 
@@ -92,3 +94,20 @@ def get_project_service(session: SessionDep) -> ProjectService:
 
 UserServiceDep = Annotated[UserService, Depends(get_user_service)]
 ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]
+
+
+def get_scope_engine(request: Request) -> ScopeEngine:
+    engine: ScopeEngine = request.app.state.scope_engine
+    return engine
+
+
+ScopeEngineDep = Annotated[ScopeEngine, Depends(get_scope_engine)]
+
+
+def get_asset_service(
+    session: SessionDep, engine: ScopeEngineDep, settings: SettingsDep
+) -> AssetService:
+    return AssetService(session, engine, settings)
+
+
+AssetServiceDep = Annotated[AssetService, Depends(get_asset_service)]

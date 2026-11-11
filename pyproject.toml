@@ -8,11 +8,12 @@ requires-python = ">=3.12,<3.13"
 package = false
 
 [tool.uv.workspace]
-members = ["apps/api", "workers"]
+members = ["apps/api", "workers", "security-engine"]
 
 [tool.uv.sources]
 sentinelx-api = { workspace = true }
 sentinelx-workers = { workspace = true }
+sentinelx-security = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -42,12 +43,12 @@ select = [
 ignore = []
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**" = ["S101", "S105", "S106", "ARG001", "ARG002"]
+"**/tests/**" = ["S101", "S104", "S105", "S106", "ARG001", "ARG002"]
 "conftest.py" = ["S105"]
-"apps/api/migrations/**" = ["N999"]
+"apps/api/migrations/**" = ["N999", "E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["app", "sentinelx_workers", "tests"]
+known-first-party = ["app", "sentinelx_workers", "sentinelx_security", "tests"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
@@ -60,7 +61,7 @@ python_version = "3.12"
 strict = true
 warn_unreachable = true
 plugins = ["pydantic.mypy"]
-mypy_path = ["apps/api", "workers"]
+mypy_path = ["apps/api", "workers", "security-engine"]
 explicit_package_bases = true
 exclude = ["apps/web/", "apps/api/migrations/versions/"]
 
@@ -78,7 +79,7 @@ warn_required_dynamic_aliases = true
 # ---------------------------------------------------------------------------
 [tool.pytest.ini_options]
 minversion = "9.0"
-testpaths = ["apps/api/tests", "workers/tests"]
+testpaths = ["apps/api/tests", "workers/tests", "security-engine/tests"]
 pythonpath = ["apps/api"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
@@ -89,7 +90,7 @@ markers = [
 filterwarnings = ["error"]
 
 [tool.coverage.run]
-source = ["apps/api/app", "workers/sentinelx_workers"]
+source = ["apps/api/app", "workers/sentinelx_workers", "security-engine/sentinelx_security"]
 branch = true
 # Async SQLAlchemy drives database calls through greenlets; without this, code
 # that resumes after awaited queries is not attributed and coverage under-reports.
@@ -104,4 +105,4 @@ fail_under = 85
 # Bandit
 # ---------------------------------------------------------------------------
 [tool.bandit]
-exclude_dirs = ["apps/api/tests", "workers/tests", "apps/web", ".venv"]
+exclude_dirs = ["apps/api/tests", "workers/tests", "security-engine/tests", "apps/web", ".venv"]

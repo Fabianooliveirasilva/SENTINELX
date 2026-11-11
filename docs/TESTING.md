@@ -68,17 +68,16 @@ test (RBAC seed rows are preserved). Redis-dependent behavior in API tests uses
 > Integration tests **truncate** the database they point at. Never run them
 > against a database holding data you want to keep.
 
-## Latest results (Phase 2, local run 2026-11-11)
+## Latest results (Phase 3, local run 2026-11-11)
 
 | Suite | Result |
 |-------|--------|
-| Backend unit + API (no infrastructure) | 75 passed |
-| Backend full suite (unit + integration, PostgreSQL 16 local) | 142 passed, 2 deselected (need real Redis), coverage 97% |
-| Frontend (Vitest) | 38 passed |
-| E2E (Playwright, Chromium, real API + PostgreSQL) | 7 passed |
-| Ruff / mypy strict / ESLint strict / tsc | clean |
-| Bandit / Semgrep / Gitleaks / pip-audit / pnpm audit | 0 findings |
-| Docker build, compose smoke, Trivy | CI only (Docker unavailable on the development host) |
+| Security engine (scope parsing, policy, decisions, DNS) | 139 passed |
+| Backend full suite (unit + integration + engine, PostgreSQL 16 local) | 316 passed, 2 deselected (need real Redis), coverage 97% |
+| Frontend (Vitest) | 43 passed |
+| E2E (Playwright, Chromium, real API + PostgreSQL) | 8 passed |
+| Ruff / mypy strict / ESLint strict / tsc / Bandit | clean |
+| Docker build, compose smoke, Trivy, real-Redis tests | CI only |
 
 ## Phase 1 results (2026-11-10)
 

@@ -16,7 +16,7 @@ intelligence, prioritize risk with a transparent model, monitor security events,
 and generate evidence-based reports — with an optional AI analyst that explains
 findings and drafts remediation, never inventing evidence.
 
-> **Project status — Phase 2 (Identity, access & tenancy) complete.** The platform skeleton,
+> **Project status — Phase 3 (Assets & scope enforcement) complete.** The platform skeleton,
 > infrastructure, quality gates and architecture are in place. Security features
 > are delivered phase by phase; see the [roadmap](docs/ROADMAP.md).
 
@@ -32,7 +32,7 @@ findings and drafts remediation, never inventing evidence.
 | Observability | Structured JSON logs, correlation IDs, secret redaction, health/readiness probes | ✅ Phase 1 |
 | DevSecOps | CI with lint, strict typing, tests, Gitleaks, Bandit, Semgrep, pip-audit, pnpm audit, Trivy, compose E2E | ✅ Phase 1 |
 | Identity | Argon2id, rotating refresh tokens with reuse detection, CSRF, lockout, rate limiting, RBAC (Admin / Analyst / Viewer), project isolation, append-only audit log | ✅ Phase 2 |
-| Assets & scope | Authorized asset inventory, scope engine with SSRF / DNS-rebinding defenses | 🗓 Phase 3 |
+| Assets & scope | Authorized asset inventory, immutable authorization records, deny-by-default scope engine (SSRF, DNS rebinding, IPv4-in-IPv6, redirects) with explained decisions | ✅ Phase 3 |
 | Reconnaissance | DNS, passive subdomains, TLS analysis, Nmap safe profiles in sandboxes | 🗓 Phase 4 |
 | Vulnerabilities | OWASP ZAP baseline, curated Nuclei templates, finding lifecycle & evidence | 🗓 Phase 5 |
 | Threat intel | NVD CVE/CWE/CPE sync and version-range correlation | 🗓 Phase 6 |

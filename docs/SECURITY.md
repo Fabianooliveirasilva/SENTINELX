@@ -26,7 +26,7 @@ The threat analysis behind these controls is in [THREAT_MODEL.md](THREAT_MODEL.m
 | Tenant isolation (project-scoped queries, 404 for foreign resources) | Implemented | `app/repositories/projects.py` |
 | Trusted proxy configuration (client IP from Nginx only) | Implemented | `docker-compose.yml` (`FORWARDED_ALLOW_IPS`) |
 | Multi-factor authentication, production email backend | Planned | Phase 12 |
-| SSRF/scope enforcement, DNS rebinding and redirect defenses | Planned | Phase 3 |
+| SSRF/scope enforcement, DNS rebinding and redirect defenses | Implemented | [SCANNING_POLICY.md](SCANNING_POLICY.md), `security-engine/` |
 | Scanner sandboxing and egress restriction | Planned | Phase 4 |
 | AI prompt-injection defenses and data minimization | Planned | Phase 9 |
 

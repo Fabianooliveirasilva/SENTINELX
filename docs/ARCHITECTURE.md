@@ -152,8 +152,9 @@ goes through services. Extraction later is a packaging change, not a rewrite.
 
 ### ADR-002 — uv workspace for Python packages
 **Decision:** Python code is organized as a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/)
-with one lockfile (`uv.lock`). Members: `apps/api` (`sentinelx-api`) and
-`workers` (`sentinelx-workers`). Future engines (`security-engine`,
+with one lockfile (`uv.lock`). Members: `apps/api` (`sentinelx-api`),
+`workers` (`sentinelx-workers`) and, since Phase 3, `security-engine`
+(`sentinelx-security`: the framework-independent scope engine). Future engines (`security-engine`,
 `threat-intelligence`, `ai-engine`) join as members with importable package names
 (hyphenated directory names are not valid Python modules).
 **Rationale:** a single resolved dependency set across API and workers, fast and

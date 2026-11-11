@@ -49,6 +49,8 @@ export const ALL_PERMISSIONS = [
   "projects:manage",
   "audit:read",
   "settings:manage",
+  "assets:read",
+  "assets:write",
 ];
 
 /** Put the session store in an authenticated state for component tests. */

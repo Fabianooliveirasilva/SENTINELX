@@ -26,6 +26,7 @@ from app.middleware.request_context import REQUEST_ID_HEADER, RequestContextMidd
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.services.email import build_email_sender
 from app.services.health import DatabaseHealthCheck, HealthService, RedisHealthCheck
+from sentinelx_security.scope import DnsResolver, NetworkPolicy, ScopeEngine, parse_lab_networks
 
 logger = get_logger(__name__)
 
@@ -61,6 +62,16 @@ def _build_lifespan(
     return lifespan
 
 
+def build_scope_engine(settings: Settings) -> ScopeEngine:
+    return ScopeEngine(
+        NetworkPolicy(parse_lab_networks(settings.scope_lab_networks)),
+        DnsResolver(
+            timeout_seconds=settings.dns_timeout_seconds, nameservers=settings.dns_nameservers
+        ),
+        lab_domains=settings.scope_lab_domains,
+    )
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(level=settings.log_level, json_logs=settings.log_json)
@@ -78,6 +89,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.password_service = PasswordService(settings)
     app.state.access_token_service = AccessTokenService(settings)
     app.state.email_sender = build_email_sender(settings)
+    app.state.scope_engine = build_scope_engine(settings)
 
     register_exception_handlers(app)
 

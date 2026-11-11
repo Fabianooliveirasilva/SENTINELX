@@ -17,5 +17,6 @@ apps/web/playwright-report
 apps/web/test-results
 apps/api/tests
 workers/tests
+security-engine/tests
 docs
 .github

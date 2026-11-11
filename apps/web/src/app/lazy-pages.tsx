@@ -7,6 +7,13 @@ const ProjectDetailPage = lazy(() =>
 );
 const UsersPage = lazy(() => import("@/features/users/users-page").then((m) => ({ default: m.UsersPage })));
 const AuditLogsPage = lazy(() => import("@/features/audit/audit-logs-page").then((m) => ({ default: m.AuditLogsPage })));
+const AssetsPage = lazy(() => import("@/features/assets/assets-page").then((m) => ({ default: m.AssetsPage })));
+const AssetDetailPage = lazy(() =>
+  import("@/features/assets/asset-detail-page").then((m) => ({ default: m.AssetDetailPage })),
+);
+const ScopeCheckPage = lazy(() =>
+  import("@/features/assets/scope-check-page").then((m) => ({ default: m.ScopeCheckPage })),
+);
 const AccountPage = lazy(() => import("@/features/settings/account-page").then((m) => ({ default: m.AccountPage })));
 
 function Loading({ children }: { children: ReactNode }) {
@@ -38,5 +45,20 @@ export const AuditLogsRoute = () => (
 export const AccountRoute = () => (
   <Loading>
     <AccountPage />
+  </Loading>
+);
+export const AssetsRoute = () => (
+  <Loading>
+    <AssetsPage />
+  </Loading>
+);
+export const AssetDetailRoute = () => (
+  <Loading>
+    <AssetDetailPage />
+  </Loading>
+);
+export const ScopeCheckRoute = () => (
+  <Loading>
+    <ScopeCheckPage />
   </Loading>
 );

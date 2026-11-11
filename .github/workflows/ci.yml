@@ -39,7 +39,7 @@ jobs:
       - name: Ruff (format)
         run: uv run ruff format --check .
       - name: Mypy (strict)
-        run: uv run mypy apps/api/app apps/api/tests apps/api/migrations workers
+        run: uv run mypy apps/api/app apps/api/tests apps/api/migrations workers security-engine
 
   backend-tests:
     name: Backend · unit & API tests (no infrastructure)
@@ -157,7 +157,7 @@ jobs:
           enable-cache: true
       - run: uv sync --all-packages
       - name: Bandit (Python SAST)
-        run: uv run bandit -c pyproject.toml -r apps/api/app workers/sentinelx_workers
+        run: uv run bandit -c pyproject.toml -r apps/api/app workers/sentinelx_workers security-engine/sentinelx_security
       - name: pip-audit (Python dependencies)
         run: |
           uv export --all-packages --no-dev --no-emit-workspace --format requirements.txt -o "$RUNNER_TEMP/requirements.txt" -q

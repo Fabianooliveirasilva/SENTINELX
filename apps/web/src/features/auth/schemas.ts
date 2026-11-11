@@ -55,4 +55,6 @@ export type Permission =
   | "projects:read"
   | "projects:manage"
   | "audit:read"
-  | "settings:manage";
+  | "settings:manage"
+  | "assets:read"
+  | "assets:write";
