@@ -7,6 +7,7 @@ Requirements: Docker Engine 24+ with the Compose v2 plugin.
 ```bash
 make env     # create .env with random secrets (refuses to overwrite)
 make up      # build images, run migrations, start everything, wait for health
+make admin   # create the first administrator (prompts for email and password)
 make smoke   # readiness through Nginx + enqueue a worker task
 ```
 
@@ -51,8 +52,11 @@ secret manager (Docker/Kubernetes secrets, Vault, cloud KMS) instead of a file.
 * Pin images by digest; sign and scan images in the release pipeline.
 * Run `migrate` as a separate, gated release step.
 * Use managed PostgreSQL with backups/PITR and Redis with persistence.
-* Configure Uvicorn `--forwarded-allow-ips` for the actual proxy addresses before
-  relying on client IPs (rate limiting, audit logs — Phase 2).
+* Client IPs (rate limiting, audit) come from `X-Forwarded-For` only when the
+  request originates from the Nginx container (`FORWARDED_ALLOW_IPS=172.30.10.10`,
+  fixed address on the `frontend` network). Adjust it to your proxy/load balancer.
+* Configure a production email backend before enabling password reset; the
+  `console` backend is rejected when `SENTINELX_ENVIRONMENT=production`.
 * Redis receives its password on the command line, which is visible to processes
   inside its container; use a mounted ACL/config file in production.
 

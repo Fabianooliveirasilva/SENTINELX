@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from tests.conftest import build_settings
+from tests.conftest import build_production_settings, build_settings
 
 
 def test_defaults_are_valid() -> None:
@@ -60,11 +60,32 @@ def test_rejects_short_secret_key() -> None:
 
 def test_production_rejects_placeholder_secret() -> None:
     with pytest.raises(ValidationError, match="placeholder"):
-        build_settings(environment="production", secret_key="change-me-" + "x" * 40)
+        build_production_settings(secret_key="change-me-" + "x" * 40)
 
 
 def test_production_disables_docs() -> None:
-    settings = build_settings(environment="production", secret_key="a" * 48)
+    settings = build_production_settings()
 
     assert settings.is_production
     assert settings.docs_enabled is False
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"cookie_secure": False}, "cookie_secure"),
+        ({"email_backend": "console"}, "console"),
+        ({"argon2_memory_cost_kib": 1024}, "Argon2id"),
+    ],
+)
+def test_production_rejects_weak_auth_settings(overrides: dict[str, object], message: str) -> None:
+    with pytest.raises(ValidationError, match=message):
+        build_production_settings(**overrides)
+
+
+def test_frontend_base_url_must_be_absolute() -> None:
+    with pytest.raises(ValidationError, match="frontend_base_url"):
+        build_settings(frontend_base_url="/relative")
+    assert build_settings(frontend_base_url="https://app.example.com/").frontend_base_url == (
+        "https://app.example.com"
+    )

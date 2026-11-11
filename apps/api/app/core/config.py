@@ -66,6 +66,29 @@ class Settings(BaseSettings):
 
     health_check_timeout_seconds: float = Field(default=2.0, gt=0, le=30)
 
+    # --- Authentication -------------------------------------------------------
+    access_token_ttl_seconds: int = Field(default=600, ge=60, le=3600)
+    refresh_token_ttl_seconds: int = Field(default=7 * 24 * 3600, ge=3600, le=30 * 24 * 3600)
+    password_reset_ttl_seconds: int = Field(default=1800, ge=300, le=24 * 3600)
+    # OWASP Password Storage Cheat Sheet minimum for Argon2id: m=19 MiB, t=2, p=1.
+    argon2_time_cost: int = Field(default=2, ge=1, le=10)
+    argon2_memory_cost_kib: int = Field(default=19456, ge=8, le=1_048_576)
+    argon2_parallelism: int = Field(default=1, ge=1, le=8)
+    login_max_failures: int = Field(default=5, ge=1, le=100)
+    login_lockout_seconds: int = Field(default=900, ge=60, le=24 * 3600)
+    allow_self_registration: bool = False
+    # Browsers treat http://localhost as a secure context, so Secure cookies work in
+    # local development too. Only disable for non-browser test clients.
+    cookie_secure: bool = True
+    frontend_base_url: str = "http://localhost:8080"
+    email_backend: Literal["console", "disabled"] = "console"
+
+    # --- Rate limits (requests per window) --------------------------------------
+    rate_limit_login_per_minute: int = Field(default=10, ge=1)
+    rate_limit_refresh_per_minute: int = Field(default=60, ge=1)
+    rate_limit_password_reset_per_hour: int = Field(default=5, ge=1)
+    rate_limit_register_per_hour: int = Field(default=5, ge=1)
+
     # ------------------------------------------------------------------ validators
 
     @field_validator("cors_allowed_origins", "allowed_hosts", mode="before")
@@ -95,6 +118,14 @@ class Settings(BaseSettings):
             raise ValueError("wildcard '*' is not permitted in allowed_hosts")
         return hosts
 
+    @field_validator("frontend_base_url")
+    @classmethod
+    def _validate_frontend_url(cls, value: str) -> str:
+        parts = urlsplit(value)
+        if parts.scheme not in {"http", "https"} or not parts.netloc:
+            raise ValueError("frontend_base_url must be an absolute http(s) URL")
+        return value.rstrip("/")
+
     @field_validator("database_url")
     @classmethod
     def _validate_database_url(cls, value: SecretStr) -> SecretStr:
@@ -121,6 +152,12 @@ class Settings(BaseSettings):
             raise ValueError("secret_key contains a placeholder value; generate a random secret")
         if not self.log_json:
             raise ValueError("log_json must be enabled in production")
+        if not self.cookie_secure:
+            raise ValueError("cookie_secure must be enabled in production")
+        if self.email_backend == "console":
+            raise ValueError("the console email backend is not permitted in production")
+        if self.argon2_memory_cost_kib < 19456 or self.argon2_time_cost < 2:
+            raise ValueError("Argon2id parameters are below the OWASP minimum for production")
         return self
 
     # ------------------------------------------------------------------ derived

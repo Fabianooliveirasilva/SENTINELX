@@ -6,6 +6,33 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-11-11 — Phase 2: Identity, access & tenancy
+
+### Added
+- Users, roles, permissions (RBAC catalog seeded by migration and checked against code),
+  refresh tokens, password-reset tokens, projects, project membership and an
+  append-only audit log (database trigger rejects UPDATE/DELETE).
+- Argon2id password hashing (OWASP parameters, transparent rehash), NIST-style
+  length-based password policy, account lockout with uniform login timing.
+- Short-lived JWT access tokens (HS256, issuer/audience/type/version checks) and
+  rotating opaque refresh tokens in HttpOnly/SameSite=Strict cookies with reuse
+  detection that revokes the whole session family.
+- Signed double-submit CSRF tokens bound to the session family.
+- Session listing and revocation, forced sign-out, password change and email-based
+  password reset (single-use, hashed, expiring tokens in the URL fragment).
+- Permission-based authorization dependency; project-scoped repositories returning
+  404 for other tenants' resources; last-admin and self-demotion protection.
+- Redis fixed-window rate limiting for authentication endpoints (fail-open).
+- `sentinelx-admin create-admin` CLI for bootstrapping the first administrator.
+- Frontend: login, password reset, route guards with safe `next` redirects, users &
+  roles management, projects and members, audit log viewer, account settings,
+  route-level code splitting.
+
+### Fixed
+- Web image: apply Alpine security updates (critical `brotli-libs` CVE flagged by Trivy).
+- Alembic no longer disables application loggers when migrations run in-process.
+- Coverage measurement with async SQLAlchemy (greenlet concurrency).
+
 ## [0.1.0] — 2026-11-10 — Phase 1: Foundation
 
 ### Added

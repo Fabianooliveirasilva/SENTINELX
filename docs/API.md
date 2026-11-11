@@ -57,8 +57,34 @@ Readiness probe; checks PostgreSQL and Redis concurrently with a timeout.
 
 `error` is limited to `timeout` or `unreachable`; details are only in server logs.
 
+## Endpoints (Phase 2)
+
+| Method & path | Permission | Notes |
+|---------------|------------|-------|
+| `POST /auth/login` | public | Rate limited; sets refresh + CSRF cookies |
+| `POST /auth/refresh` | refresh cookie + `X-CSRF-Token` | Rotates the refresh token |
+| `POST /auth/logout` | refresh cookie + `X-CSRF-Token` | 204; idempotent |
+| `GET /auth/me` | authenticated | User, role and permissions |
+| `POST /auth/change-password` | authenticated | Signs out every session |
+| `GET /auth/sessions` · `DELETE /auth/sessions/{id}` | authenticated | Own sessions only |
+| `POST /auth/password-reset/request` · `/confirm` | public | 202 regardless of account existence |
+| `POST /auth/register` | public | 403 unless self-registration is enabled |
+| `GET /users` · `GET /users/{id}` | `users:read` | Filters: `search`, `role`, `is_active`; `sort` |
+| `POST /users` · `PATCH /users/{id}` | `users:manage` | Role/status changes audited |
+| `POST /users/{id}/revoke-sessions` | `users:manage` | Forced sign-out |
+| `GET /roles` | `roles:read` | Roles with permissions |
+| `GET /projects` · `GET /projects/{id}` | `projects:read` | Membership-scoped; 404 outside scope |
+| `POST/PATCH/DELETE /projects…` | `projects:manage` | |
+| `GET /projects/{id}/members` | `projects:read` | |
+| `POST /projects/{id}/members` · `DELETE …/{user_id}` | `projects:manage` | |
+| `GET /audit-logs` · `GET /audit-logs/actions` | `audit:read` | Filters: `action`, `actor_id`, `project_id`, `outcome`, `since`, `until` |
+
+Authentication: `Authorization: Bearer <access_token>`. `401` responses include
+`WWW-Authenticate: Bearer`; `429` responses include `Retry-After`. Details in
+[AUTHENTICATION.md](AUTHENTICATION.md).
+
 ## Planned resources
 
-`/auth`, `/users`, `/projects`, `/assets`, `/scans`, `/findings`,
-`/intelligence`, `/events`, `/reports`, `/ai`, `/audit-logs`, `/settings` —
+`/assets`, `/scans`, `/findings`,
+`/intelligence`, `/events`, `/reports`, `/ai`, `/settings` —
 introduced phase by phase (see [ROADMAP.md](ROADMAP.md)).

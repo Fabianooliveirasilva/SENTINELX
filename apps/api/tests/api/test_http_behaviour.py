@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from app.core.errors import AppError
-from tests.conftest import build_settings
+from tests.conftest import build_production_settings, build_settings
 
 
 def _client(app: FastAPI, base_url: str = "http://testserver") -> httpx.AsyncClient:
@@ -118,7 +118,7 @@ async def test_security_headers_present(client: httpx.AsyncClient) -> None:
 
 
 async def test_hsts_enabled_in_production(make_app: Callable[..., FastAPI]) -> None:
-    prod = build_settings(environment="production", secret_key="a" * 48)
+    prod = build_production_settings()
     async with _client(make_app(settings_override=prod)) as client:
         response = await client.get("/api/v1/health/live")
 
@@ -126,7 +126,7 @@ async def test_hsts_enabled_in_production(make_app: Callable[..., FastAPI]) -> N
 
 
 async def test_docs_disabled_in_production(make_app: Callable[..., FastAPI]) -> None:
-    prod = build_settings(environment="production", secret_key="a" * 48)
+    prod = build_production_settings()
     async with _client(make_app(settings_override=prod)) as client:
         assert (await client.get("/api/docs")).status_code == 404
         assert (await client.get("/api/openapi.json")).status_code == 404

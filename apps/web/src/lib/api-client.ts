@@ -3,9 +3,9 @@ import { z } from "zod";
 /**
  * Typed HTTP client for the SentinelX API.
  *
- * Every response body is validated with a Zod schema before reaching UI code,
- * so a backend contract change surfaces as an explicit error instead of
- * silently rendering wrong data.
+ * - Every response body is validated with a Zod schema before reaching UI code.
+ * - The in-memory access token is attached automatically. On a 401 the client
+ *   asks the registered auth handler to refresh the session once and retries.
  */
 
 export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
@@ -46,8 +46,44 @@ export interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   signal?: AbortSignal;
+  query?: Record<string, string | number | boolean | null | undefined>;
+  headers?: Record<string, string>;
   /** Non-2xx statuses whose body is a valid payload (e.g. 503 from readiness). */
   acceptStatuses?: readonly number[];
+  /** Skip the automatic refresh-and-retry on 401 (used by auth endpoints themselves). */
+  skipAuthRefresh?: boolean;
+}
+
+export interface AuthHandler {
+  getAccessToken: () => string | null;
+  /** Attempt to obtain a new access token. Resolves true on success. */
+  refresh: () => Promise<boolean>;
+}
+
+let authHandler: AuthHandler | null = null;
+
+export function setAuthHandler(handler: AuthHandler | null): void {
+  authHandler = handler;
+}
+
+export function readCookie(name: string): string | null {
+  const prefix = `${name}=`;
+  for (const part of document.cookie.split(";")) {
+    const cookie = part.trim();
+    if (cookie.startsWith(prefix)) return decodeURIComponent(cookie.slice(prefix.length));
+  }
+  return null;
+}
+
+function buildUrl(path: string, query: RequestOptions["query"]): string {
+  const url = `${API_BASE_URL}${path}`;
+  if (!query) return url;
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== null && value !== "") params.set(key, String(value));
+  }
+  const qs = params.toString();
+  return qs ? `${url}?${qs}` : url;
 }
 
 async function readJson(response: Response): Promise<unknown> {
@@ -60,21 +96,18 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
-export async function apiRequest<T>(
-  path: string,
-  schema: z.ZodType<T>,
-  options: RequestOptions = {},
-): Promise<T> {
-  const { method = "GET", body, signal, acceptStatuses = [] } = options;
-
-  let response: Response;
+async function send(path: string, options: RequestOptions): Promise<Response> {
+  const { method = "GET", body, signal, query, headers = {} } = options;
+  const token = authHandler?.getAccessToken();
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
+    return await fetch(buildUrl(path, query), {
       method,
       credentials: "same-origin",
       headers: {
         Accept: "application/json",
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headers,
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       ...(signal ? { signal } : {}),
@@ -86,6 +119,19 @@ export async function apiRequest<T>(
       code: "network_error",
       message: "Unable to reach the SentinelX API.",
     });
+  }
+}
+
+export async function apiRequest<T>(
+  path: string,
+  schema: z.ZodType<T>,
+  options: RequestOptions = {},
+): Promise<T> {
+  const { acceptStatuses = [], skipAuthRefresh = false } = options;
+
+  let response = await send(path, options);
+  if (response.status === 401 && !skipAuthRefresh && authHandler) {
+    if (await authHandler.refresh()) response = await send(path, options);
   }
 
   const requestId = response.headers.get("X-Request-ID");
@@ -119,4 +165,17 @@ export async function apiRequest<T>(
     });
   }
   return parsed.data;
+}
+
+/** Schema for endpoints that return 204 No Content. */
+export const noContent = z.null();
+
+/** Schema for paginated list responses. */
+export function pageSchema<T extends z.ZodType>(item: T) {
+  return z.object({
+    items: z.array(item),
+    total: z.number().int().nonnegative(),
+    page: z.number().int().positive(),
+    page_size: z.number().int().positive(),
+  });
 }

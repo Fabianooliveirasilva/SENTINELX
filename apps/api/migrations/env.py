@@ -9,14 +9,15 @@ from alembic import context
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
+import app.models  # noqa: F401  (registers all tables on Base.metadata)
 from app.core.config import get_settings
 from app.db.base import Base
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Keep loggers configured by the host process (e.g. when migrations run in-process).
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
-# Import model modules here as they are added so autogenerate can see them.
 target_metadata = Base.metadata
 
 

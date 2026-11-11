@@ -67,10 +67,10 @@ TB1 user→platform · TB2 app→data stores · TB3 worker→sandbox · TB4 sand
 | T5 | E | Command injection into scanner invocations | No shell; argument vectors built from enumerated, server-side profiles; targets validated as IP/hostname literals; no user-provided flags | Phase 4 |
 | T6 | T/E | Malicious scanner output exploiting parsers or the UI (stored XSS) | Output treated as untrusted data, size-limited, parsed with safe parsers (`defusedxml`), stored as text; React escaping; strict CSP (`script-src 'self'`, no inline) | CSP **Implemented**; parsers Phase 4 |
 | T7 | T | Prompt injection via banners/HTML/descriptions reaching the LLM | Delimited, labeled untrusted input; minimal context; no tools; schema-validated outputs; outputs never auto-applied; human review required | Phase 9 |
-| T8 | I | Cross-project data exposure (IDOR) | Project-scoped repositories; membership-derived scope; 404 for foreign resources; tests per endpoint | Phase 2–3 |
-| T9 | S | Credential stuffing / brute force | Argon2id; rate limiting; progressive lockout; generic error messages; audit events | Phase 2 |
-| T10 | S/E | Token theft or replay | Short-lived access tokens; rotating, hashed refresh tokens with reuse detection; HttpOnly/Secure/SameSite cookies; CSRF protection; revocation on logout/password change | Phase 2 |
-| T11 | E | Privilege escalation through role manipulation | Server-side permission checks only; role changes restricted to Admin and audited; mass-assignment prevented by explicit Pydantic input schemas | Phase 2 |
+| T8 | I | Cross-project data exposure (IDOR) | Project-scoped repositories; membership-derived scope; 404 for foreign resources; tests per endpoint | **Implemented** (projects); extended per module |
+| T9 | S | Credential stuffing / brute force | Argon2id; rate limiting; lockout; generic error messages; uniform timing; audit events | **Implemented** |
+| T10 | S/E | Token theft or replay | Short-lived access tokens; rotating, hashed refresh tokens with reuse detection; HttpOnly/Secure/SameSite cookies; signed CSRF tokens; token_version revocation | **Implemented** |
+| T11 | E | Privilege escalation through role manipulation | Server-side permission checks only; role changes restricted to Admin and audited; `extra=forbid` input schemas; last-admin protection | **Implemented** |
 | T12 | I | Secrets in logs or error responses | `SecretStr`; key-based and URL-credential log redaction; generic 500s; no query strings in access logs; validation errors do not echo input | **Implemented** |
 | T13 | I | Secrets committed to the repository | `.gitignore`, `.dockerignore`, generated `.env` (0600), Gitleaks in CI | **Implemented** |
 | T14 | T | Host-header / cache poisoning | `TrustedHostMiddleware` allowlist; no wildcard allowed | **Implemented** |
@@ -79,7 +79,7 @@ TB1 user→platform · TB2 app→data stores · TB3 worker→sandbox · TB4 sand
 | T17 | D | Resource exhaustion (long scans, large outputs, many jobs) | Celery time limits (**Implemented**); container CPU/memory limits (**Implemented**); per-project concurrency quotas, output size caps (Phase 4) | Partial |
 | T18 | T | Supply-chain compromise (packages, images, actions, Nuclei templates) | Lockfiles; pinned image tags; GitHub Actions pinned by commit SHA; pip-audit, pnpm audit, Trivy; Dependabot; Nuclei templates pinned and curated (Phase 5); image digest pinning (Phase 12) | Partial |
 | T19 | E | Container escape / lateral movement | Non-root users, `cap_drop: ALL`, `no-new-privileges`, read-only root FS for app containers, internal network for data stores | **Implemented** (app); sandbox Phase 4 |
-| T20 | R | Repudiation of sensitive actions | Append-only audit log with actor, IP, correlation ID | Phase 2 |
+| T20 | R | Repudiation of sensitive actions | Append-only audit log (DB trigger) with actor, IP, correlation ID | **Implemented** |
 | T21 | I | AI provider receives sensitive data | Data minimization, redaction of secrets/PII before sending, opt-in per project, provider abstraction | Phase 9 |
 | T22 | T | Fabricated findings, CVEs or exploitability claims | AI output stored separately and labeled; CVEs only from NVD with match confidence; risk engine deterministic and explainable | Phases 6, 7, 9 |
 

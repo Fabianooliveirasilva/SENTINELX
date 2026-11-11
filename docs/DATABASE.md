@@ -1,8 +1,15 @@
 # SentinelX Database Design
 
-> Phase 1 ships the database foundation (engine, session factory, declarative
-> base, naming conventions, Alembic baseline). The entities below are the
-> **proposal** that later phases implement, each with its own migration.
+> **Implemented:** foundation (Phase 1) and identity, access & tenancy (Phase 2,
+> migration `0002`): `users`, `roles`, `permissions`, `role_permissions`,
+> `refresh_tokens`, `password_reset_tokens`, `projects`, `project_members`,
+> `audit_logs`. Remaining entities below are the proposal for later phases.
+>
+> **Design change in Phase 2:** roles are assigned per user (platform-wide) and
+> project membership grants access. A per-project role override can be added to
+> `project_members` later without changing the authorization API.
+> `audit_logs` has no foreign keys (actor email is snapshotted) and is protected
+> by an append-only trigger.
 
 ## Conventions
 

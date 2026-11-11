@@ -16,7 +16,7 @@ intelligence, prioritize risk with a transparent model, monitor security events,
 and generate evidence-based reports — with an optional AI analyst that explains
 findings and drafts remediation, never inventing evidence.
 
-> **Project status — Phase 1 (Foundation) complete.** The platform skeleton,
+> **Project status — Phase 2 (Identity, access & tenancy) complete.** The platform skeleton,
 > infrastructure, quality gates and architecture are in place. Security features
 > are delivered phase by phase; see the [roadmap](docs/ROADMAP.md).
 
@@ -31,7 +31,7 @@ findings and drafts remediation, never inventing evidence.
 | Platform | Modular FastAPI API, Celery workers, React SPA, PostgreSQL, Redis, Docker Compose | ✅ Phase 1 |
 | Observability | Structured JSON logs, correlation IDs, secret redaction, health/readiness probes | ✅ Phase 1 |
 | DevSecOps | CI with lint, strict typing, tests, Gitleaks, Bandit, Semgrep, pip-audit, pnpm audit, Trivy, compose E2E | ✅ Phase 1 |
-| Identity | Argon2id, rotating refresh tokens, RBAC (Admin / Analyst / Viewer), project isolation | 🗓 Phase 2 |
+| Identity | Argon2id, rotating refresh tokens with reuse detection, CSRF, lockout, rate limiting, RBAC (Admin / Analyst / Viewer), project isolation, append-only audit log | ✅ Phase 2 |
 | Assets & scope | Authorized asset inventory, scope engine with SSRF / DNS-rebinding defenses | 🗓 Phase 3 |
 | Reconnaissance | DNS, passive subdomains, TLS analysis, Nmap safe profiles in sandboxes | 🗓 Phase 4 |
 | Vulnerabilities | OWASP ZAP baseline, curated Nuclei templates, finding lifecycle & evidence | 🗓 Phase 5 |
@@ -59,8 +59,9 @@ internal network with no internet egress. Details and decision records:
 
 ## Screenshots
 
-_The System Status page (Phase 1) reports live readiness of every dependency._
-Screenshots of the full product will be added as feature pages land.
+_Phase 2 ships sign-in, users & roles, projects with membership, the audit log and
+the system status page._ Screenshots of the full product will be added as
+security feature pages land.
 
 ## Technology
 
@@ -79,6 +80,7 @@ generate secrets).
 git clone <your-fork-url> sentinelx && cd sentinelx
 make env      # writes .env with random secrets
 make up       # builds, migrates and starts the stack (waits for health)
+make admin    # creates the first administrator account
 make smoke    # verifies readiness through Nginx and a worker task
 ```
 
@@ -116,6 +118,7 @@ See [docs/TESTING.md](docs/TESTING.md) for the strategy and latest results.
 | [ROADMAP](docs/ROADMAP.md) | Phases, acceptance criteria, success checklist |
 | [DATABASE](docs/DATABASE.md) | Conventions, ER diagram, entity proposal, tenancy |
 | [API](docs/API.md) | Conventions, error format, endpoints |
+| [AUTHENTICATION](docs/AUTHENTICATION.md) | Credentials, tokens, sessions, CSRF, RBAC, audit |
 | [SECURITY](docs/SECURITY.md) | Controls and CI quality gates |
 | [THREAT_MODEL](docs/THREAT_MODEL.md) | STRIDE analysis and mitigations |
 | [SCANNING_POLICY](docs/SCANNING_POLICY.md) | What may be scanned, how, and what is prohibited |
