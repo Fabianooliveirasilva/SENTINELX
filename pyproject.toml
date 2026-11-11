@@ -1,0 +1,103 @@
+[project]
+name = "sentinelx"
+version = "0.1.0"
+description = "SentinelX workspace root (not a distributable package)."
+requires-python = ">=3.12,<3.13"
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["apps/api", "workers"]
+
+[tool.uv.sources]
+sentinelx-api = { workspace = true }
+sentinelx-workers = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.17.4",
+    "mypy>=2.4.1",
+    "bandit[toml]>=1.9.4",
+    "pip-audit>=2.10.1",
+]
+
+# ---------------------------------------------------------------------------
+# Ruff
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["apps/web"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "B", "UP", "N", "S", "C4", "SIM", "RUF",
+    "ASYNC", "PT", "RET", "PTH", "TID", "ARG", "DTZ", "LOG", "G", "BLE",
+]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101", "S105", "S106", "ARG001", "ARG002"]
+"conftest.py" = ["S105"]
+"apps/api/migrations/**" = ["N999"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "sentinelx_workers", "tests"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+# ---------------------------------------------------------------------------
+# Mypy
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
+mypy_path = ["apps/api", "workers"]
+explicit_package_bases = true
+exclude = ["apps/web/", "apps/api/migrations/versions/"]
+
+[[tool.mypy.overrides]]
+module = ["celery", "celery.*"]
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["apps/api/tests", "workers/tests"]
+pythonpath = ["apps/api"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = ["-ra", "--strict-markers", "--strict-config", "-m", "not integration"]
+markers = [
+    "integration: requires real PostgreSQL and Redis (run with `-m integration`)",
+]
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["apps/api/app", "workers/sentinelx_workers"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 85
+
+# ---------------------------------------------------------------------------
+# Bandit
+# ---------------------------------------------------------------------------
+[tool.bandit]
+exclude_dirs = ["apps/api/tests", "workers/tests", "apps/web", ".venv"]

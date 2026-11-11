@@ -1,0 +1,21 @@
+[project]
+name = "sentinelx-workers"
+version = "0.1.0"
+description = "SentinelX asynchronous workers (Celery)."
+requires-python = ">=3.12,<3.13"
+license = "MIT"
+dependencies = [
+    "sentinelx-api",
+    "celery[redis]>=5.7.0,<5.8",
+]
+
+[tool.uv.sources]
+sentinelx-api = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "sentinelx_workers"
+module-root = ""

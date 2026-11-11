@@ -1,0 +1,64 @@
+# SentinelX API
+
+Base path: `/api/v1`. Interactive documentation is served at `/api/docs`
+(Swagger UI) and `/api/openapi.json` outside production.
+
+## Conventions
+
+| Topic | Convention |
+|-------|------------|
+| Format | JSON (`application/json`), UTF-8, `snake_case` fields |
+| Identifiers | UUIDs |
+| Timestamps | ISO 8601 in UTC |
+| Pagination _(Phase 2+)_ | `?page=1&page_size=50` (max 200); response `{items, total, page, page_size}` |
+| Filtering / sorting _(Phase 2+)_ | Explicit query parameters per resource; `?sort=-created_at` with an allowlist of fields |
+| Long-running work | `202 Accepted` with `{job_id, status}`; state via `GET /scans/{job_id}` |
+| Correlation | Send `X-Request-ID` (8–64 chars, `[A-Za-z0-9._-]`) or receive a generated one in every response |
+| Auth _(Phase 2)_ | `Authorization: Bearer <access token>`; refresh via HttpOnly cookie |
+
+## Error envelope
+
+Every non-2xx response (except readiness, which returns a report) uses:
+
+```json
+{
+  "error": {
+    "code": "validation_error",
+    "message": "The request payload is invalid.",
+    "request_id": "2f1c0f0e-8a7b-4c39-9a51-0c1f3c1f0f7e",
+    "details": [{ "location": ["body", "count"], "message": "Input should be a valid integer", "type": "int_parsing" }]
+  }
+}
+```
+
+`code` is stable and machine-readable; `message` is safe to display. Submitted
+values and exception messages are never echoed back.
+
+## Endpoints (Phase 1)
+
+### `GET /api/v1/health/live`
+Liveness probe; does not touch dependencies. `200 {"status": "ok"}`.
+
+### `GET /api/v1/health/ready`
+Readiness probe; checks PostgreSQL and Redis concurrently with a timeout.
+
+`200` when all components are reachable, otherwise `503` with the same shape:
+
+```json
+{
+  "status": "unavailable",
+  "version": "0.1.0",
+  "components": {
+    "database": { "status": "ok", "latency_ms": 1.8, "error": null },
+    "redis": { "status": "unavailable", "latency_ms": null, "error": "timeout" }
+  }
+}
+```
+
+`error` is limited to `timeout` or `unreachable`; details are only in server logs.
+
+## Planned resources
+
+`/auth`, `/users`, `/projects`, `/assets`, `/scans`, `/findings`,
+`/intelligence`, `/events`, `/reports`, `/ai`, `/audit-logs`, `/settings` —
+introduced phase by phase (see [ROADMAP.md](ROADMAP.md)).
