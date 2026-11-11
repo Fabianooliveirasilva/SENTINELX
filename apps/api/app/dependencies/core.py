@@ -15,6 +15,7 @@ from app.core.security.tokens import AccessTokenService
 from app.services.assets import AssetService
 from app.services.auth import AuthService
 from app.services.email import EmailSender
+from app.services.findings import FindingService
 from app.services.projects import ProjectService
 from app.services.rate_limit import RateLimiter
 from app.services.scan_dispatch import ScanDispatcher
@@ -130,3 +131,10 @@ def get_scan_service(
 
 
 ScanServiceDep = Annotated[ScanService, Depends(get_scan_service)]
+
+
+def get_finding_service(session: SessionDep) -> FindingService:
+    return FindingService(session)
+
+
+FindingServiceDep = Annotated[FindingService, Depends(get_finding_service)]

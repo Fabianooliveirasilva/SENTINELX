@@ -151,7 +151,9 @@ async def test_scanner_catalog(stack: ApiStack) -> None:
     response = await stack.client.get("/api/v1/scanners", headers=viewer)
     assert response.status_code == 200
     catalog = {s["name"]: s for s in response.json()}
-    assert set(catalog) == {"dns", "subdomains", "tls", "nmap", "http"}
+    assert set(catalog) == {"dns", "subdomains", "tls", "nmap", "http", "nuclei", "zap"}
+    zap_profiles = {p["name"]: p["technique"] for p in catalog["zap"]["profiles"]}
+    assert zap_profiles == {"baseline": "active", "full": "intrusive"}
     assert catalog["nmap"]["technique"] == "active"
     assert catalog["subdomains"]["technique"] == "passive"
     assert {p["name"] for p in catalog["nmap"]["profiles"]} == {"quick", "standard", "web"}
@@ -284,7 +286,7 @@ async def test_passive_authorization_blocks_active_scanners(stack: ApiStack) -> 
     [
         ({"scanner": "dns"}, "does not support ip_address"),
         ({"scanner": "nmap", "profile": "aggressive"}, "Unknown profile"),
-        ({"scanner": "zap"}, "Unknown scanner"),
+        ({"scanner": "metasploit"}, "Unknown scanner"),
     ],
 )
 async def test_invalid_requests(stack: ApiStack, body: dict[str, str], fragment: str) -> None:
@@ -458,3 +460,36 @@ async def test_celery_orchestrator_tasks_against_the_database(stack: ApiStack) -
     ).to_dict()
     assert await asyncio.to_thread(tasks.record.run, outcome, job["id"]) == "completed"
     assert await asyncio.to_thread(tasks.expire_stale.run) == 0
+
+
+async def test_intrusive_profile_requires_an_intrusive_authorization(stack: ApiStack) -> None:
+    admin, analyst, project = await _setup(stack)
+    asset = await _asset(stack, analyst, project)
+    denied = await _request(stack, analyst, project, asset, scanner="zap", profile="full")
+    assert denied.status_code == 422
+    assert "not authorized for intrusive scanning" in denied.json()["error"]["message"]
+
+    baseline = await _request(stack, analyst, project, asset, scanner="zap")
+    assert baseline.status_code == 202
+    assert baseline.json()["technique"] == "active"
+    assert stack.dispatcher.dispatched == [baseline.json()["id"]]
+
+    # Only administrators can record intrusive authorizations.
+    response = await stack.client.post(
+        f"/api/v1/projects/{project}/assets/{asset}/authorizations",
+        headers=admin,
+        json={
+            "authorized_by": "Jane Owner",
+            "organization": "Acme Corp",
+            "reference": "SOW-2-PENTEST",
+            "valid_from": (NOW - timedelta(hours=1)).isoformat(),
+            "valid_until": (NOW + timedelta(days=7)).isoformat(),
+            "allow_active": True,
+            "allow_intrusive": True,
+            "ip_ranges": ["93.184.215.0/24"],
+        },
+    )
+    assert response.status_code == 201, response.text
+    full = await _request(stack, analyst, project, asset, scanner="zap", profile="full")
+    assert full.status_code == 202, full.text
+    assert full.json()["technique"] == "intrusive"

@@ -89,6 +89,20 @@ class ProcessRunner(Protocol):
     ) -> ProcessResult: ...
 
 
+def minimal_env(extra: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Environment for scanner subprocesses.
+
+    Tools never inherit the worker's environment, which holds the broker
+    credentials: only a PATH, a writable HOME and a locale are passed.
+    """
+    return {
+        "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
+        "HOME": "/tmp",  # noqa: S108  # nosec B108 - sandbox tmpfs
+        "LANG": "C.UTF-8",
+        **(extra or {}),
+    }
+
+
 class SubprocessRunner:
     async def run(
         self, argv: Sequence[str], *, timeout_seconds: float, env: Mapping[str, str] | None
@@ -98,7 +112,7 @@ class SubprocessRunner:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             stdin=asyncio.subprocess.DEVNULL,
-            env={**os.environ, **env} if env else None,
+            env=minimal_env(env),
             start_new_session=True,
         )
         try:

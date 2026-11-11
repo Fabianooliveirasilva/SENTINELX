@@ -26,6 +26,8 @@ Open <http://localhost:8080>. API docs (non-production only):
 | `web` | `sentinelx/web` (nginx-unprivileged) | `127.0.0.1:8080` | non-root, read-only FS, `cap_drop: ALL`, `no-new-privileges`, limits |
 | `api` | `sentinelx/api` | `127.0.0.1:8000` | non-root (uid 10001), read-only FS, `cap_drop: ALL`, `no-new-privileges`, limits |
 | `worker` | `sentinelx/api` (Celery command) | — | same as API; `backend` network only (no egress); consumes `celery` + `orchestrator` queues and runs the embedded beat schedule (stale-job expiry) |
+| `scanner-zap` | `sentinelx/scanner` (Celery, `scans.zap` queue, concurrency 1) | — | same as `scanner`; also on `zap-net`; hosts the egress guard ZAP must use (port 8899) |
+| `zap` | `zaproxy/zap-stable:2.17.0` (daemon) | — | `zap-net` only (internal, no egress); API key; read-only FS with tmpfs home; `cap_drop: ALL`; 2 GiB limit |
 | `scanner` | `sentinelx/scanner` (Celery, `scans` queue) | — | non-root (uid 10002), read-only FS, `cap_drop: ALL`, `no-new-privileges`, CPU/memory/PID limits; **no DB URL or secret key**; `backend` + `scan-egress` networks |
 | `migrate` | `sentinelx/api` (Alembic) | — | same as API; one-shot |
 | `postgres` | `postgres:17.11-alpine3.24` | — | SCRAM auth, internal network, limits |
@@ -36,8 +38,10 @@ Open <http://localhost:8080>. API docs (non-production only):
 * **API/worker:** multi-stage build with `uv` and the frozen lockfile; runtime
   stage contains only the virtualenv, Alembic config and migrations; runs as
   uid/gid 10001; no compilers or package managers.
-* **Scanner:** same Python build, runtime adds Debian's `nmap` and CA
-  certificates; runs as uid/gid 10002 from `/tmp`; unprivileged TCP connect scans
+* **Scanner:** same Python build, runtime adds Debian's `nmap`, CA certificates,
+  the Nuclei binary and a template release (both downloaded with `ADD --checksum`
+  against pinned SHA-256 values; bump `NUCLEI_*` build args together with their
+  hashes); runs as uid/gid 10002 from `/tmp`; unprivileged TCP connect scans
   only, so no capabilities are granted.
 * **Web:** Node 24 build stage (`pnpm install --frozen-lockfile`, `vite build`);
   runtime is unprivileged Nginx serving static assets and proxying `/api`.
@@ -68,7 +72,9 @@ secret manager (Docker/Kubernetes secrets, Vault, cloud KMS) instead of a file.
   defense in depth against a compromised scanner binary.
 * Scan tuning: `SENTINELX_SCAN_TIMEOUT_SECONDS`, `SENTINELX_SCAN_QUEUE_TIMEOUT_SECONDS`,
   `SENTINELX_MAX_CONCURRENT_SCANS_PER_PROJECT`, `SENTINELX_MAX_DAILY_SCANS_PER_PROJECT`
-  (API/worker) and `SENTINELX_PASSIVE_SOURCES_ENABLED` (scanner).
+  (API/worker) and `SENTINELX_PASSIVE_SOURCES_ENABLED` (scanner);
+  `SENTINELX_ZAP_SCAN_TIMEOUT_SECONDS` (default 900). `ZAP_API_KEY` is generated
+  by `make env` and shared only by `zap` and `scanner-zap`.
 * Redis receives its password on the command line, which is visible to processes
   inside its container; use a mounted ACL/config file in production.
 

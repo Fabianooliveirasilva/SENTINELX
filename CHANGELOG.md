@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-11-11 — Phase 5: Vulnerability assessment
+
+### Added
+- Findings (`findings`, `finding_occurrences`, `finding_status_changes`): stable
+  fingerprints, severity, confidence, CWE, remediation, references; versioned,
+  deterministic rules turn TLS, HTTP-header, DNS/e-mail and exposed-service
+  observations into findings; ZAP/Nuclei verdicts mapped without upgrading.
+- Lifecycle: new/updated on every completed scan, regressions reopen resolved
+  findings, absent issues auto-resolve per scanner and profile, analyst
+  `false_positive`/`accepted_risk` decisions (reason required) are respected.
+- Egress guard: per-scan forward proxy admitting only the authorized host:port,
+  connecting to pinned IPs without DNS, with budgets and denied-destination evidence.
+- Nuclei adapter: pinned v3.11.1 binary and templates v10.5.1 (SHA-256 verified
+  at build), allowlisted template directories, `http` protocol only, excluded
+  intrusive/exploit tags, interactsh and update checks disabled.
+- OWASP ZAP 2.17 daemon on an internal-only network, driven through its API by a
+  dedicated `scanner-zap` worker (`scans.zap` queue, serialized); `baseline`
+  profile (spider + passive) and `full` profile (active, **intrusive**).
+- Per-profile techniques in the scanner contract; per-scanner timeouts.
+- API: findings list/summary/detail/triage. UI: Findings tab, finding detail
+  with evidence and history, triage dialog, findings delta on scan details.
+
+### Changed
+- Scanner subprocesses (Nmap, Nuclei) get a minimal environment and never inherit
+  the worker's broker credentials.
+
 ## [0.4.0] — 2026-11-11 — Phase 4: Scan orchestration & reconnaissance
 
 ### Added

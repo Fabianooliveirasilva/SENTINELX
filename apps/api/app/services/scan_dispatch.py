@@ -20,6 +20,8 @@ from app.core.config import Settings
 
 ORCHESTRATOR_QUEUE = "orchestrator"
 SCANNER_QUEUE = "scans"
+# ZAP drives a single shared daemon, so its scans are serialized on their own queue.
+ZAP_QUEUE = "scans.zap"
 START_TASK = "sentinelx.scans.start"
 EXECUTE_TASK = "sentinelx.scans.execute"
 RECORD_TASK = "sentinelx.scans.record"
@@ -33,7 +35,7 @@ class DispatchHandle:
 
 
 class ScanDispatcher(Protocol):
-    def dispatch(self, job_id: str, timeout_seconds: int) -> DispatchHandle: ...
+    def dispatch(self, job_id: str, scanner: str, timeout_seconds: int) -> DispatchHandle: ...
 
     def revoke(self, task_id: str) -> None: ...
 
@@ -60,11 +62,11 @@ class CeleryScanDispatcher:
     def __init__(self, app: Celery) -> None:
         self._app = app
 
-    def dispatch(self, job_id: str, timeout_seconds: int) -> DispatchHandle:
+    def dispatch(self, job_id: str, scanner: str, timeout_seconds: int) -> DispatchHandle:
         execute = signature(
             EXECUTE_TASK,
             app=self._app,
-            queue=SCANNER_QUEUE,
+            queue=ZAP_QUEUE if scanner == "zap" else SCANNER_QUEUE,
             soft_time_limit=timeout_seconds + TIME_LIMIT_GRACE_SECONDS // 2,
             time_limit=timeout_seconds + TIME_LIMIT_GRACE_SECONDS,
         )

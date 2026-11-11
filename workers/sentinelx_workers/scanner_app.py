@@ -47,6 +47,15 @@ class ScannerSettings(BaseSettings):
     nmap_binary: str = "nmap"
     crtsh_url: str = "https://crt.sh/"
     passive_sources_enabled: bool = True
+    nuclei_binary: str = "nuclei"
+    nuclei_templates_dir: str = "/opt/nuclei-templates"
+    nuclei_version: str = "unknown"
+    nuclei_templates_version: str = "unknown"
+    zap_api_url: str = "http://zap:8080"
+    zap_api_key: SecretStr = SecretStr("")
+    zap_proxy_bind: str = "0.0.0.0"  # noqa: S104  # nosec B104 - internal ZAP network
+    zap_proxy_port: int = Field(default=8899, ge=1, le=65535)
+    zap_proxy_host: str = "scanner-zap"
 
     @field_validator("scope_lab_networks", "scope_lab_domains", "dns_nameservers", mode="before")
     @classmethod
@@ -77,6 +86,15 @@ class ScannerSettings(BaseSettings):
             dns_nameservers=tuple(self.dns_nameservers),
             crtsh_url=self.crtsh_url,
             passive_sources_enabled=self.passive_sources_enabled,
+            nuclei_binary=self.nuclei_binary,
+            nuclei_templates_dir=self.nuclei_templates_dir,
+            nuclei_version=self.nuclei_version,
+            nuclei_templates_version=self.nuclei_templates_version,
+            zap_api_url=self.zap_api_url,
+            zap_api_key=self.zap_api_key.get_secret_value(),
+            zap_proxy_bind=self.zap_proxy_bind,
+            zap_proxy_port=self.zap_proxy_port,
+            zap_proxy_host=self.zap_proxy_host,
         )
 
 

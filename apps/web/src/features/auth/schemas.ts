@@ -59,4 +59,6 @@ export type Permission =
   | "assets:read"
   | "assets:write"
   | "scans:read"
-  | "scans:execute";
+  | "scans:execute"
+  | "findings:read"
+  | "findings:write";

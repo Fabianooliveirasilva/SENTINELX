@@ -100,6 +100,24 @@ jobs:
             inspect registered --timeout 10 | grep -q sentinelx.scans.execute
           docker compose exec -T worker celery -A sentinelx_workers.celery_app:celery_app \
             inspect active_queues --timeout 10 | grep -q orchestrator
+          docker compose exec -T scanner nuclei -version 2>&1 | tail -1
+          docker compose exec -T scanner-zap celery -A sentinelx_workers.scanner_app:scanner_app \
+            inspect active_queues --timeout 10 | grep -q scans.zap
+
+      - name: ZAP is reachable only through the egress guard
+        run: |
+          # The ZAP container has no route to the internet (internal network only).
+          if docker compose exec -T zap bash -c 'exec 3<>/dev/tcp/1.1.1.1/443' 2>/dev/null; then
+            echo "ZAP reached the internet directly" >&2; exit 1
+          fi
+          docker compose exec -T scanner-zap python -c "
+          import os, httpx
+          key = os.environ['SENTINELX_ZAP_API_KEY']
+          r = httpx.get('http://zap:8080/JSON/core/view/version/', headers={'X-ZAP-API-Key': key}, timeout=10)
+          r.raise_for_status(); print(r.json())
+          r = httpx.get('http://zap:8080/JSON/core/view/version/', timeout=10)
+          assert r.status_code in (400, 401, 403), r.status_code
+          "
 
       # The throwaway credential only ever lives in a runner temp file: it is never
       # echoed, masked or exported, so it cannot appear in logs.

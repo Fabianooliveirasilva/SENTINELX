@@ -34,6 +34,9 @@ from sentinelx_security.scope import NetworkPolicy, ScopeEngine, StaticResolver,
 
 ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
 TENANT_TABLES = (
+    "finding_occurrences",
+    "finding_status_changes",
+    "findings",
     "platform_settings",
     "scan_evidence",
     "scan_results",
@@ -67,7 +70,7 @@ class RecordingDispatcher:
         self.revoked: list[str] = []
         self.fail = False
 
-    def dispatch(self, job_id: str, timeout_seconds: int) -> DispatchHandle:
+    def dispatch(self, job_id: str, scanner: str, timeout_seconds: int) -> DispatchHandle:
         if self.fail:
             raise ConnectionError("broker down")
         self.dispatched.append(job_id)

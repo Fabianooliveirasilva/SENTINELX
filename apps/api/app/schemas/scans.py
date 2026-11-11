@@ -35,6 +35,7 @@ class ScanCreate(BaseModel):
 class ScanProfileRead(BaseModel):
     name: str
     description: str
+    technique: Technique
 
 
 class ScannerRead(BaseModel):
@@ -53,7 +54,10 @@ def scanner_catalog() -> list[ScannerRead]:
             technique=cls.technique,
             description=cls.description,
             default_profile=cls.default_profile,
-            profiles=[ScanProfileRead(name=k, description=v) for k, v in cls.profiles.items()],
+            profiles=[
+                ScanProfileRead(name=k, description=v, technique=cls.technique_for(k))
+                for k, v in cls.profiles.items()
+            ],
             supported_asset_types=sorted(cls.supported_asset_types),
         )
         for cls in CATALOG.values()

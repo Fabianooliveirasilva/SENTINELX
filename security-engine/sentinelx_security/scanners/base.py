@@ -44,6 +44,8 @@ class ScannerName(StrEnum):
     TLS = "tls"
     NMAP = "nmap"
     HTTP = "http"
+    NUCLEI = "nuclei"
+    ZAP = "zap"
 
 
 class ScanError(Exception):
@@ -115,6 +117,9 @@ class Scanner(ABC):
     description: ClassVar[str]
     profiles: ClassVar[Mapping[str, str]] = {"default": "Default profile"}
     default_profile: ClassVar[str] = "default"
+    # Profiles that need a stronger authorization than the scanner's default
+    # technique (e.g. an active ZAP scan is intrusive).
+    profile_techniques: ClassVar[Mapping[str, Technique]] = {}
     supported_asset_types: ClassVar[frozenset[AssetType]]
 
     @classmethod
@@ -126,14 +131,21 @@ class Scanner(ABC):
             )
         return value
 
+    @classmethod
+    def technique_for(cls, profile: str) -> Technique:
+        return cls.profile_techniques.get(profile, cls.technique)
+
     async def validate_scope(
         self,
         engine: ScopeEngine,
         target: str,
         assets: Sequence[ScopeAsset],
         now: datetime,
+        *,
+        profile: str | None = None,
     ) -> ScopeDecision:
-        return await engine.evaluate(target, self.technique, assets, now)
+        technique = self.technique_for(profile) if profile else self.technique
+        return await engine.evaluate(target, technique, assets, now)
 
     @abstractmethod
     async def execute(self, ctx: ScanContext) -> RawOutput: ...

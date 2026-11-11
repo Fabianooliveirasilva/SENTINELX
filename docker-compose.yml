@@ -8,8 +8,11 @@
 # Network design:
 #   backend     (internal: no outbound internet) -> postgres, redis, migrate, api, worker, scanner
 #   frontend    (bridge, 172.30.10.0/24)          -> web (fixed IP), api
-#   scan-egress (bridge, outbound)                -> scanner only (the only container that
-#               talks to scan targets; it has no database credentials or secret key)
+#   scan-egress (bridge, outbound)                -> scanner, scanner-zap (the only containers
+#               that talk to scan targets; no database credentials or secret key)
+#   zap-net     (internal: no outbound)           -> zap, scanner-zap. ZAP's ONLY route out is
+#               the egress guard inside scanner-zap, which admits the authorized
+#               origin only and connects to the scope engine's pinned addresses.
 # Only the web (8080) and API (8000) ports are published, and only on 127.0.0.1.
 
 name: sentinelx
@@ -190,6 +193,85 @@ services:
       resources:
         limits: { cpus: "1.0", memory: 512M }
 
+  # ZAP scans run one at a time on their own queue: the ZAP daemon holds a single
+  # session. This worker hosts the egress guard ZAP must use (port 8899).
+  scanner-zap:
+    <<: *hardening
+    image: sentinelx/scanner:dev
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop: [ALL]
+    command:
+      - celery
+      - -A
+      - sentinelx_workers.scanner_app:scanner_app
+      - worker
+      - --queues=scans.zap
+      - --concurrency=1
+      - --loglevel=INFO
+      - --without-gossip
+      - --without-mingle
+    environment:
+      SENTINELX_LOG_LEVEL: ${SENTINELX_LOG_LEVEL:-INFO}
+      SENTINELX_LOG_JSON: "true"
+      SENTINELX_CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@redis:6379/1
+      SENTINELX_SCOPE_LAB_NETWORKS: ${SENTINELX_SCOPE_LAB_NETWORKS:-}
+      SENTINELX_SCOPE_LAB_DOMAINS: ${SENTINELX_SCOPE_LAB_DOMAINS:-}
+      SENTINELX_ZAP_API_URL: http://zap:8080
+      SENTINELX_ZAP_API_KEY: ${ZAP_API_KEY:?set ZAP_API_KEY in .env (run make env)}
+      SENTINELX_ZAP_PROXY_HOST: scanner-zap
+      SENTINELX_ZAP_PROXY_PORT: "8899"
+    networks: [backend, scan-egress, zap-net]
+    depends_on:
+      redis: { condition: service_healthy }
+      zap: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A sentinelx_workers.scanner_app:scanner_app inspect ping -d celery@$$HOSTNAME --timeout 5 | grep -q pong"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 20s
+    pids_limit: 256
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
+
+  # OWASP ZAP daemon: no route to the internet or the backend network.
+  zap:
+    <<: *hardening
+    image: zaproxy/zap-stable:2.17.0
+    command:
+      - zap.sh
+      - -daemon
+      - -silent
+      - -host
+      - 0.0.0.0
+      - -port
+      - "8080"
+      - -config
+      - api.key=${ZAP_API_KEY:?set ZAP_API_KEY in .env (run make env)}
+      - -config
+      - api.addrs.addr.name=.*
+      - -config
+      - api.addrs.addr.regex=true
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+      - /home/zap/.ZAP:size=512m,uid=1000,gid=1000
+    cap_drop: [ALL]
+    networks: [zap-net]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080'"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    pids_limit: 512
+    deploy:
+      resources:
+        limits: { cpus: "1.5", memory: 2G }
+
   web:
     <<: *hardening
     build:
@@ -221,6 +303,8 @@ networks:
     internal: true
   scan-egress:
     driver: bridge
+  zap-net:
+    internal: true
   frontend:
     ipam:
       config:

@@ -16,7 +16,7 @@ intelligence, prioritize risk with a transparent model, monitor security events,
 and generate evidence-based reports — with an optional AI analyst that explains
 findings and drafts remediation, never inventing evidence.
 
-> **Project status — Phase 4 (Scan orchestration & reconnaissance) complete.** The platform skeleton,
+> **Project status — Phase 5 (Vulnerability assessment) complete.** The platform skeleton,
 > infrastructure, quality gates and architecture are in place. Security features
 > are delivered phase by phase; see the [roadmap](docs/ROADMAP.md).
 
@@ -34,7 +34,7 @@ findings and drafts remediation, never inventing evidence.
 | Identity | Argon2id, rotating refresh tokens with reuse detection, CSRF, lockout, rate limiting, RBAC (Admin / Analyst / Viewer), project isolation, append-only audit log | ✅ Phase 2 |
 | Assets & scope | Authorized asset inventory, immutable authorization records, deny-by-default scope engine (SSRF, DNS rebinding, IPv4-in-IPv6, redirects) with explained decisions | ✅ Phase 3 |
 | Reconnaissance | Asynchronous scan jobs; DNS posture, passive CT subdomains, TLS analysis, HTTP fingerprinting, Nmap safe profiles in a credential-free sandbox; quotas and emergency stop | ✅ Phase 4 |
-| Vulnerabilities | OWASP ZAP baseline, curated Nuclei templates, finding lifecycle & evidence | 🗓 Phase 5 |
+| Vulnerabilities | OWASP ZAP (isolated daemon) and pinned, curated Nuclei behind a scope-enforcing egress guard; deterministic findings with deduplication, regressions, triage and evidence | ✅ Phase 5 |
 | Threat intel | NVD CVE/CWE/CPE sync and version-range correlation | 🗓 Phase 6 |
 | Risk | Deterministic, explainable, versioned risk engine | 🗓 Phase 7 |
 | Monitoring | Security events, alerts, timeline, audit logs | 🗓 Phase 8 |

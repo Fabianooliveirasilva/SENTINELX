@@ -39,6 +39,7 @@ from app.models.scan import ACTIVE_STATUSES
 from app.schemas.pagination import PageParams
 from app.services.assets import compute_eligibility, to_scope_asset
 from app.services.audit import record_audit
+from app.services.findings import ingest_findings
 from app.services.projects import ProjectService
 from app.services.scan_dispatch import ScanDispatcher
 from sentinelx_security.scanners import CATALOG, ScannerName, ScanRequest
@@ -100,7 +101,7 @@ async def expire_stale_jobs(session: AsyncSession, settings: Settings) -> int:
     """Fail jobs whose messages were lost (broker restart, crashed sandbox)."""
     now = utcnow()
     queue_cutoff = now - timedelta(seconds=settings.scan_queue_timeout_seconds)
-    run_cutoff = now - timedelta(seconds=settings.scan_timeout_seconds + RUNNING_GRACE_SECONDS)
+    run_cutoff = now - timedelta(seconds=settings.max_scan_timeout_seconds + RUNNING_GRACE_SECONDS)
     expired = 0
     for status, column, cutoff, code, message in (
         ("pending", ScanJob.created_at, queue_cutoff, "dispatch_lost", "The job was never queued."),
@@ -171,7 +172,7 @@ async def start_job(
         profile=job.profile,
         target=job.target,
         assets=[asset_to_dict(to_scope_asset(a)) for a in assets],
-        timeout_seconds=float(settings.scan_timeout_seconds),
+        timeout_seconds=float(settings.scan_timeout_for(job.scanner)),
     )
     await session.commit()
     return request.to_dict()
@@ -218,6 +219,9 @@ async def record_outcome(
             )
             for e in list(outcome.get("evidence") or [])[:MAX_EVIDENCE_ITEMS]
         )
+        await session.flush()
+        ingested = await ingest_findings(session, job, observations)
+        job.summary = {**job.summary, "findings": ingested.to_dict()}
     else:
         job.status = "failed"
         job.error_code = str(outcome.get("error_code") or "scanner_error")[:64]
@@ -237,6 +241,7 @@ async def record_outcome(
             "target": job.target,
             "error_code": job.error_code,
             "observations": len(observations) if job.status == "completed" else 0,
+            "findings": job.summary.get("findings"),
         },
     )
     await session.commit()
@@ -366,12 +371,13 @@ class ScanService:
         except ScanError as exc:
             raise InvalidRequestError(exc.message) from exc
 
+        technique = cls.technique_for(profile)
         eligibility = compute_eligibility(asset, self._engine, utcnow())
         allowed = {
             Technique.PASSIVE: eligibility.passive,
             Technique.ACTIVE: eligibility.active,
             Technique.INTRUSIVE: eligibility.intrusive,
-        }[cls.technique]
+        }[technique]
         if not allowed:
             reason = eligibility.reasons[0] if eligibility.reasons else "Asset is not eligible."
             record_audit(
@@ -385,13 +391,13 @@ class ScanService:
                 project_id=project_id,
                 details={
                     "scanner": cls.name.value,
-                    "technique": cls.technique.value,
+                    "technique": technique.value,
                     "reason": reason,
                 },
             )
             await self._session.commit()
             raise InvalidRequestError(
-                f"This asset is not authorized for {cls.technique.value} scanning: {reason}"
+                f"This asset is not authorized for {technique.value} scanning: {reason}"
             )
 
         await self._enforce_quotas(project_id)
@@ -401,7 +407,7 @@ class ScanService:
             asset_id=asset.id,
             scanner=cls.name.value,
             profile=profile,
-            technique=cls.technique.value,
+            technique=technique.value,
             target=target,
             status="pending",
             requested_by_id=principal.user_id,
@@ -428,7 +434,9 @@ class ScanService:
         await self._session.commit()
 
         try:
-            handle = self._dispatcher.dispatch(str(job.id), self._settings.scan_timeout_seconds)
+            handle = self._dispatcher.dispatch(
+                str(job.id), job.scanner, self._settings.scan_timeout_for(job.scanner)
+            )
         except Exception as exc:
             logger.error("scan_dispatch_failed", scan_job_id=str(job.id), error=type(exc).__name__)
             job.status = "failed"

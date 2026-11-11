@@ -1,0 +1,6 @@
+{"template":"http/exposures/configs/git-config.yaml","template-id":"git-config","template-path":"/opt/nuclei-templates/http/exposures/configs/git-config.yaml","info":{"name":"Git Configuration - Detect","author":["pdteam"],"tags":["config","git","exposure"],"description":"Git configuration was detected via the pattern /.git/config and log file on passed URLs.","reference":["https://example.org/git-config"],"severity":"medium","classification":{"cve-id":null,"cwe-id":["cwe-200"]},"remediation":"Block access to the .git directory."},"type":"http","host":"https://app.example.com","matched-at":"https://app.example.com/.git/config","ip":"93.184.215.14","timestamp":"2026-11-11T10:00:00Z","matcher-status":true}
+{"template-id":"tech-detect","info":{"name":"Wappalyzer Technology Detection","severity":"info","tags":"tech"},"matcher-name":"nginx","type":"http","matched-at":"https://app.example.com/","matcher-status":true}
+not json at all
+{"template-id": 42, "info": {}}
+["array"]
+{"template-id":"x-<script>","info":{"name":"<img src=x onerror=alert(1)>","severity":"HIGH","classification":"bad"},"matched-at":"https://app.example.com/<x>"}
