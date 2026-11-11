@@ -15,7 +15,10 @@ concurrency:
 
 env:
   UV_VERSION: "0.13.7"
-  PYTHON_VERSION: "3.12"
+  # Exact patch release, matching the runtime image: stdlib behaviour that the
+  # scope engine relies on (ipaddress) changes between 3.12.x releases.
+  PYTHON_VERSION: "3.12.16"
+  UV_PYTHON_PREFERENCE: only-managed
   NODE_VERSION: "24"
   UV_FROZEN: "1"
 

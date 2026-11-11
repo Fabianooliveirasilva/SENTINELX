@@ -131,18 +131,18 @@ class NetworkPolicy:
 
     def check(self, ip: IPAddress) -> AddressVerdict:
         address = ip.compressed
-        # Embedded IPv4 is checked first so the reason names the real destination.
-        candidates: list[IPAddress] = [*embedded_ipv4(ip), ip]
-        for candidate in candidates:
-            reason = _hard_block_reason(candidate)
+        # Embedded IPv4 destinations are judged first and on their own: they are the
+        # real destination, and the stdlib's classification of the outer IPv6 form
+        # has changed between Python patch releases (CVE-2024-4032 fixes).
+        for embedded in embedded_ipv4(ip):
+            reason = _hard_block_reason(embedded)
+            if reason is None and not self.in_lab(embedded) and not embedded.is_global:
+                reason = "non_public_address"
             if reason is not None:
-                if candidate is not ip:
-                    reason = f"embedded_{reason}"
-                return AddressVerdict(address, allowed=False, reason=reason)
-        for candidate in candidates:
-            if self.in_lab(candidate):
-                continue
-            if not candidate.is_global:
-                reason = "non_public_address" if candidate is ip else "embedded_non_public_address"
-                return AddressVerdict(address, allowed=False, reason=reason)
+                return AddressVerdict(address, allowed=False, reason=f"embedded_{reason}")
+        reason = _hard_block_reason(ip)
+        if reason is None and not self.in_lab(ip) and not ip.is_global:
+            reason = "non_public_address"
+        if reason is not None:
+            return AddressVerdict(address, allowed=False, reason=reason)
         return AddressVerdict(address, allowed=True)
