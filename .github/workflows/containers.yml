@@ -32,6 +32,11 @@ jobs:
         with:
           persist-credentials: false
 
+      # Generated first so that diagnostic/teardown steps can always interpolate
+      # docker-compose.yml, even when an earlier step fails.
+      - name: Generate ephemeral .env
+        run: python3 scripts/generate_env.py
+
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Build API image
@@ -60,9 +65,6 @@ jobs:
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.76.2 \
               image --exit-code 1 --severity CRITICAL --ignore-unfixed --no-progress "$image"
           done
-
-      - name: Generate ephemeral .env
-        run: python3 scripts/generate_env.py
 
       - name: Start stack
         run: docker compose up -d --no-build --wait --wait-timeout 180

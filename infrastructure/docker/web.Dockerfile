@@ -28,6 +28,12 @@ FROM ${NGINX_IMAGE} AS runtime
 LABEL org.opencontainers.image.title="sentinelx-web" \
       org.opencontainers.image.licenses="MIT"
 
+# Apply OS security fixes published after the base tag was built (e.g. the
+# brotli-libs CVE flagged by Trivy), then drop back to the unprivileged user.
+USER root
+RUN apk upgrade --no-cache
+USER 101
+
 COPY infrastructure/docker/nginx/default.conf /etc/nginx/conf.d/default.conf
 COPY infrastructure/docker/nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY --from=build /web/dist /usr/share/nginx/html
