@@ -4,6 +4,7 @@
 Usage:
   annotate_failure.py containers          # status + log tail of every container
   annotate_failure.py trivy <report.json> # fixable CRITICAL findings of a Trivy report
+  annotate_failure.py file <title> <path>  # tail of a text file (e.g. captured command output)
 
 Uses the plain Docker CLI (not compose) so it works even when the compose project
 failed to start. Log lines are already redacted by the services' logging pipeline.
@@ -47,8 +48,18 @@ def containers() -> None:
         annotate(f"{name} ({status})", (logs.stdout + logs.stderr) or "no output")
 
 
+def file_tail(title: str, path: str) -> None:
+    target = Path(path)
+    if target.is_file():
+        annotate(title, target.read_text(encoding="utf-8", errors="replace") or "(empty)")
+
+
 def trivy(path: str) -> None:
-    report = json.loads(Path(path).read_text(encoding="utf-8"))
+    report_path = Path(path)
+    if not report_path.is_file() or not report_path.stat().st_size:
+        file_tail(f"trivy error {report_path.name}", f"{path}.stderr")
+        return
+    report = json.loads(report_path.read_text(encoding="utf-8"))
     rows = []
     for result in report.get("Results") or []:
         for vuln in result.get("Vulnerabilities") or []:
@@ -64,5 +75,7 @@ def trivy(path: str) -> None:
 if __name__ == "__main__":
     if sys.argv[1] == "containers":
         containers()
+    elif sys.argv[1] == "file":
+        file_tail(sys.argv[2], sys.argv[3])
     else:
         trivy(sys.argv[2])
