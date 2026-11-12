@@ -188,10 +188,9 @@ services:
       timeout: 15s
       retries: 5
       start_period: 20s
-    pids_limit: 256
     deploy:
       resources:
-        limits: { cpus: "1.0", memory: 512M }
+        limits: { cpus: "1.0", memory: 512M, pids: 256 }
 
   # ZAP scans run one at a time on their own queue: the ZAP daemon holds a single
   # session. This worker hosts the egress guard ZAP must use (port 8899).
