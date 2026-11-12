@@ -76,7 +76,7 @@ jobs:
             report="$RUNNER_TEMP/trivy-$(echo "$image" | tr '/:' '--').json"
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$RUNNER_TEMP:$RUNNER_TEMP" \
               aquasec/trivy:0.76.2 image --exit-code 1 --severity CRITICAL --ignore-unfixed \
-              --no-progress --format json --output "$report" "$image" || {
+              --no-progress --format json --output "$report" "$image" 2>"$report.stderr" || {
                 status=1
                 python3 scripts/ci/annotate_failure.py trivy "$report"
               }
@@ -84,7 +84,10 @@ jobs:
           exit $status
 
       - name: Start stack
-        run: docker compose up -d --no-build --wait --wait-timeout 180
+        run: |
+          set -o pipefail
+          docker compose config --quiet 2>&1 | tee "$RUNNER_TEMP/compose.log"
+          docker compose up -d --no-build --wait --wait-timeout 180 2>&1 | tee -a "$RUNNER_TEMP/compose.log"
 
       - name: Readiness through Nginx
         run: |
@@ -164,7 +167,11 @@ jobs:
 
       - name: Container diagnostics on failure
         if: failure()
-        run: python3 scripts/ci/annotate_failure.py containers
+        run: |
+          python3 scripts/ci/annotate_failure.py file "compose" "$RUNNER_TEMP/compose.log"
+          docker images --format '{{.Repository}}:{{.Tag}} {{.Size}}' > "$RUNNER_TEMP/images.txt"
+          python3 scripts/ci/annotate_failure.py file "images" "$RUNNER_TEMP/images.txt"
+          python3 scripts/ci/annotate_failure.py containers
 
       - name: Compose logs on failure
         if: failure()
