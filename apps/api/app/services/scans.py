@@ -409,7 +409,10 @@ class ScanService:
             profile=profile,
             technique=technique.value,
             target=target,
-            status="pending",
+            # Queued before publishing: a worker may pick the chain up before this
+            # request continues, and it only starts jobs that are already queued.
+            status="queued",
+            queued_at=utcnow(),
             requested_by_id=principal.user_id,
             correlation_id=meta.request_id,
         )
@@ -439,18 +442,24 @@ class ScanService:
             )
         except Exception as exc:
             logger.error("scan_dispatch_failed", scan_job_id=str(job.id), error=type(exc).__name__)
-            job.status = "failed"
-            job.finished_at = utcnow()
-            job.error_code = "dispatch_failed"
-            job.error_message = "The job queue is unavailable."
+            await self._session.execute(
+                update(ScanJob)
+                .where(ScanJob.id == job.id, ScanJob.status == "queued")
+                .values(
+                    status="failed",
+                    finished_at=utcnow(),
+                    error_code="dispatch_failed",
+                    error_message="The job queue is unavailable.",
+                )
+            )
             await self._session.commit()
             raise ServiceUnavailableError(
                 "The scan queue is unavailable. Please try again later."
             ) from exc
         await self._session.execute(
             update(ScanJob)
-            .where(ScanJob.id == job.id, ScanJob.status == "pending")
-            .values(status="queued", queued_at=utcnow(), executor_task_id=handle.execute_task_id)
+            .where(ScanJob.id == job.id)
+            .values(executor_task_id=handle.execute_task_id)
         )
         await self._session.commit()
         return await self.get(principal, project_id, job.id)

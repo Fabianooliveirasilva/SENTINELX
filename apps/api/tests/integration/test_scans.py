@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 import uuid
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
@@ -13,6 +14,7 @@ from sqlalchemy import text
 
 from app.core.config import Settings
 from app.core.permissions import RoleName
+from app.db.session import create_engine, create_session_factory
 from app.services.scans import record_outcome, start_job
 from sentinelx_security.scanners import (
     Evidence,
@@ -493,3 +495,43 @@ async def test_intrusive_profile_requires_an_intrusive_authorization(stack: ApiS
     full = await _request(stack, analyst, project, asset, scanner="zap", profile="full")
     assert full.status_code == 202, full.text
     assert full.json()["technique"] == "intrusive"
+
+
+async def test_a_worker_that_starts_immediately_is_not_lost(stack: ApiStack) -> None:
+    """Regression: the job must be queued before the chain is published.
+
+    A fast worker can run the start step before the API request finishes; it
+    must find the job queued, not pending (which it would skip, stranding it).
+    The "worker" here runs to completion inside ``dispatch``, on its own thread,
+    event loop and database connection, before the request continues.
+    """
+    _, analyst, project = await _setup(stack)
+    asset = await _asset(stack, analyst, project)
+    started: list[Any] = []
+    original = stack.dispatcher.dispatch
+
+    def dispatch_and_start(job_id: str, *args: Any) -> Any:
+        async def worker() -> Any:
+            engine = create_engine(stack.settings)
+            try:
+                async with create_session_factory(engine)() as session:
+                    return await start_job(session, uuid.UUID(job_id), stack.settings)
+            finally:
+                await engine.dispose()
+
+        thread = threading.Thread(target=lambda: started.append(asyncio.run(worker())))
+        thread.start()
+        thread.join()
+        return original(job_id, *args)
+
+    stack.dispatcher.dispatch = dispatch_and_start  # type: ignore[method-assign,assignment]
+    response = await _request(stack, analyst, project, asset)
+    assert response.status_code == 202, response.text
+    assert started[0] is not None  # the worker found the job queued and started it
+    job = (
+        await stack.client.get(
+            f"/api/v1/projects/{project}/scans/{response.json()['id']}", headers=analyst
+        )
+    ).json()
+    assert job["status"] == "running"
+    assert job["queued_at"] is not None
