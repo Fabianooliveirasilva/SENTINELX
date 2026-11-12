@@ -71,10 +71,17 @@ jobs:
 
       - name: Trivy image scan (fail on fixable CRITICAL)
         run: |
+          status=0
           for image in sentinelx/api:dev sentinelx/scanner:dev sentinelx/web:dev; do
-            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.76.2 \
-              image --exit-code 1 --severity CRITICAL --ignore-unfixed --no-progress "$image"
+            report="$RUNNER_TEMP/trivy-$(echo "$image" | tr '/:' '--').json"
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$RUNNER_TEMP:$RUNNER_TEMP" \
+              aquasec/trivy:0.76.2 image --exit-code 1 --severity CRITICAL --ignore-unfixed \
+              --no-progress --format json --output "$report" "$image" || {
+                status=1
+                python3 scripts/ci/annotate_failure.py trivy "$report"
+              }
           done
+          exit $status
 
       - name: Start stack
         run: docker compose up -d --no-build --wait --wait-timeout 180
@@ -155,10 +162,16 @@ jobs:
           path: apps/web/playwright-report
           retention-days: 7
 
+      - name: Container diagnostics on failure
+        if: failure()
+        run: python3 scripts/ci/annotate_failure.py containers
+
       - name: Compose logs on failure
         if: failure()
+        continue-on-error: true
         run: docker compose logs --no-color --tail=200
 
       - name: Tear down
         if: always()
+        continue-on-error: true
         run: docker compose down -v
