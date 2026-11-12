@@ -1,11 +1,11 @@
 name: Containers
 
 # Builds the images, scans them, boots the full docker compose stack and runs
-# the Playwright smoke suite against it. Runs on main and for PRs that touch
-# container or dependency definitions.
+# the Playwright smoke suite against it. Runs on main, on every push to a phase
+# branch (feat/**), and for PRs that touch container or dependency definitions.
 on:
   push:
-    branches: [main]
+    branches: [main, "feat/**"]
   pull_request:
     paths:
       - "infrastructure/**"
