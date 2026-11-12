@@ -39,6 +39,7 @@ from app.models.scan import ACTIVE_STATUSES
 from app.schemas.pagination import PageParams
 from app.services.assets import compute_eligibility, to_scope_asset
 from app.services.audit import record_audit
+from app.services.events import EventType, emit
 from app.services.findings import ingest_findings
 from app.services.intel import correlate_asset, record_components
 from app.services.projects import ProjectService
@@ -122,13 +123,24 @@ async def expire_stale_jobs(session: AsyncSession, settings: Settings) -> int:
             "The scanner did not report a result in time.",
         ),
     ):
-        result = await session.execute(
-            update(ScanJob)
-            .where(ScanJob.status == status, column < cutoff)
-            .values(status="failed", finished_at=now, error_code=code, error_message=message)
-            .returning(ScanJob.id)
+        jobs = (
+            (
+                await session.execute(
+                    select(ScanJob)
+                    .where(ScanJob.status == status, column < cutoff)
+                    .with_for_update(skip_locked=True)
+                )
+            )
+            .scalars()
+            .all()
         )
-        expired += len(result.all())
+        for job in jobs:
+            job.status = "failed"
+            job.finished_at = now
+            job.error_code = code
+            job.error_message = message
+            await _scan_event(session, job, EventType.SCAN_FAILED)
+        expired += len(jobs)
     if expired:
         logger.warning("scan_jobs_expired", count=expired)
     return expired
@@ -256,8 +268,73 @@ async def record_outcome(
             "findings": job.summary.get("findings"),
         },
     )
+    await _scan_event(
+        session,
+        job,
+        EventType.SCAN_SCOPE_DENIED
+        if denied
+        else EventType.SCAN_COMPLETED
+        if job.status == "completed"
+        else EventType.SCAN_FAILED,
+    )
     await session.commit()
     return job.status
+
+
+_SCAN_EVENT_SEVERITY: Final = {
+    EventType.SCAN_COMPLETED: "info",
+    EventType.SCAN_FAILED: "medium",
+    EventType.SCAN_CANCELLED: "low",
+    EventType.SCAN_SCOPE_DENIED: "high",
+}
+
+
+async def _scan_event(
+    session: AsyncSession, job: ScanJob, event_type: EventType, actor_email: str | None = None
+) -> None:
+    verb = event_type.value.removeprefix("scan.").replace("_", " ")
+    await emit(
+        session,
+        project_id=job.project_id,
+        event_type=event_type,
+        severity=_SCAN_EVENT_SEVERITY[event_type],
+        title=f"{job.scanner}/{job.profile} scan of {job.target}: {verb}",
+        asset_id=job.asset_id,
+        scan_job_id=job.id,
+        details={
+            "scanner": job.scanner,
+            "profile": job.profile,
+            "target": job.target,
+            "status": job.status,
+            "error_code": job.error_code,
+            "error_message": job.error_message,
+            "findings": (job.summary or {}).get("findings"),
+        },
+        actor_email=actor_email,
+        # "The same scan failing again" is the same asset, scanner and profile.
+        dedup_key=f"{event_type.value}:{job.asset_id}:{job.scanner}:{job.profile}",
+    )
+
+
+async def _platform_event(
+    session: AsyncSession,
+    event_type: EventType,
+    severity: str,
+    title: str,
+    details: Mapping[str, Any],
+    actor_email: str,
+) -> None:
+    """Platform-wide changes are recorded in every project's timeline."""
+    for project_id in (await session.execute(select(Project.id))).scalars().all():
+        await emit(
+            session,
+            project_id=project_id,
+            event_type=event_type,
+            severity=severity,
+            title=title,
+            details=details,
+            actor_email=actor_email,
+        )
 
 
 def _cancel(job: ScanJob, code: str, message: str) -> None:
@@ -503,6 +580,7 @@ class ScanService:
             project_id=project_id,
             details={"previous_status": previous},
         )
+        await _scan_event(self._session, job, EventType.SCAN_CANCELLED, principal.email)
         await self._session.commit()
         self._revoke(job)
         return await self.get(principal, project_id, job.id)
@@ -528,6 +606,16 @@ class ScanService:
             meta=meta,
             details={"reason": reason.strip(), "cancelled_jobs": len(jobs)},
         )
+        for job in jobs:
+            await _scan_event(self._session, job, EventType.SCAN_CANCELLED, principal.email)
+        await _platform_event(
+            self._session,
+            EventType.SCANNING_HALTED,
+            "high",
+            "Emergency stop: all scanning halted",
+            {"reason": reason.strip(), "cancelled_jobs": len(jobs)},
+            principal.email,
+        )
         await self._session.commit()
         for job in jobs:
             self._revoke(job)
@@ -540,6 +628,14 @@ class ScanService:
             raise ConflictError("Scanning is not halted.")
         await self._set_halted(principal, halted=False, reason=None)
         record_audit(self._session, action="scan.resumed", actor=principal.actor, meta=meta)
+        await _platform_event(
+            self._session,
+            EventType.SCANNING_RESUMED,
+            "info",
+            "Scanning resumed after an emergency stop",
+            {},
+            principal.email,
+        )
         await self._session.commit()
 
     # ------------------------------------------------------------------ internals

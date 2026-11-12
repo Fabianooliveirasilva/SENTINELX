@@ -11,6 +11,8 @@
 #   scan-egress (bridge, outbound)                -> scanner, scanner-zap (the only containers
 #               that talk to scan targets; no database credentials or secret key)
 #   intel-egress (bridge, outbound)               -> intel only (NVD API and CISA KEV feed)
+#   notify-egress (bridge, outbound)              -> notifier only (SMTP relay, alert webhooks;
+#               webhook destinations are re-resolved and policy-checked per delivery)
 #   zap-net     (internal: no outbound)           -> zap, scanner-zap. ZAP's ONLY route out is
 #               the egress guard inside scanner-zap, which admits the authorized
 #               origin only and connects to the scope engine's pinned addresses.
@@ -51,6 +53,12 @@ x-app: &app
     SENTINELX_CORS_ALLOWED_ORIGINS: ${SENTINELX_CORS_ALLOWED_ORIGINS:-}
     SENTINELX_FRONTEND_BASE_URL: ${SENTINELX_FRONTEND_BASE_URL:-http://localhost:8080}
     SENTINELX_EMAIL_BACKEND: ${SENTINELX_EMAIL_BACKEND:-console}
+    SENTINELX_SMTP_HOST: ${SENTINELX_SMTP_HOST:-}
+    SENTINELX_SMTP_PORT: ${SENTINELX_SMTP_PORT:-587}
+    SENTINELX_SMTP_USERNAME: ${SENTINELX_SMTP_USERNAME:-}
+    SENTINELX_SMTP_PASSWORD: ${SENTINELX_SMTP_PASSWORD:-}
+    SENTINELX_SMTP_SECURITY: ${SENTINELX_SMTP_SECURITY:-starttls}
+    SENTINELX_EMAIL_FROM: ${SENTINELX_EMAIL_FROM:-SentinelX <no-reply@sentinelx.example.com>}
     SENTINELX_ALLOW_SELF_REGISTRATION: ${SENTINELX_ALLOW_SELF_REGISTRATION:-false}
     SENTINELX_SCOPE_LAB_NETWORKS: ${SENTINELX_SCOPE_LAB_NETWORKS:-}
     SENTINELX_SCOPE_LAB_DOMAINS: ${SENTINELX_SCOPE_LAB_DOMAINS:-}
@@ -225,6 +233,36 @@ services:
       resources:
         limits: { cpus: "0.5", memory: 384M }
 
+  # Delivers alert notifications (e-mail, signed webhooks) from the database outbox.
+  notifier:
+    <<: *app
+    command:
+      - celery
+      - -A
+      - sentinelx_workers.celery_app:celery_app
+      - worker
+      - --queues=notifications
+      - --concurrency=1
+      - --loglevel=INFO
+      - --without-gossip
+      - --without-mingle
+    environment:
+      <<: *app-env
+      SENTINELX_WEBHOOK_ALLOWED_NETWORKS: ${SENTINELX_WEBHOOK_ALLOWED_NETWORKS:-}
+    networks: [backend, notify-egress]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A sentinelx_workers.celery_app:celery_app inspect ping -d celery@$$HOSTNAME --timeout 5 | grep -q pong"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256M }
+
   # ZAP scans run one at a time on their own queue: the ZAP daemon holds a single
   # session. This worker hosts the egress guard ZAP must use (port 8899).
   scanner-zap:
@@ -338,6 +376,8 @@ networks:
   zap-net:
     internal: true
   intel-egress:
+    driver: bridge
+  notify-egress:
     driver: bridge
   frontend:
     ipam:

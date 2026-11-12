@@ -6,6 +6,37 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-11-12 — Phase 8: Monitoring & events
+
+### Added
+- `security_events` timeline written atomically with the change that caused it:
+  finding created/reopened/resolved/status changed, risk-band changes, CISA KEV
+  listings, certificate expiry, scan completed/failed/cancelled/scope-denied,
+  emergency stop/resume, asset and authorization changes, skipped schedules.
+- Alert rules per project (event types, minimum severity, optional asset,
+  channels, quiet period with recorded suppressions).
+- Notification channels: e-mail and HMAC-SHA256 signed webhooks; outbox with
+  retries, exponential backoff and a delivery log; test notifications.
+- `smtp` e-mail backend (STARTTLS or implicit TLS, verified certificates).
+- Scheduled scans that run as their owner through the interactive request path.
+- `notifier` worker on its own `notifications` queue and `notify-egress` network;
+  beat entries for delivery (30 s) and schedules (60 s).
+- Permission `alerts:manage` (admin, security analyst); migration `0008`.
+- API: `/events/types`, `/projects/{id}/events`, `/events/summary`,
+  `/notification-channels`, `/alert-rules`, `/notifications`, `/scan-schedules`.
+- UI: project Events, Alerts and Schedules tabs.
+
+### Security
+- Webhook destinations are resolved per delivery, every address must pass the
+  network policy, and the request is pinned to the checked IP (no redirects, no
+  proxies, bodies never read); https is required in production, re-checked at
+  delivery time. Signing secrets are generated server-side, shown once and
+  encrypted at rest (Fernet, HKDF-derived key); audit records keep only the host.
+
+### Fixed
+- Scan jobs are queued before their Celery chain is published; a fast worker
+  could previously skip a job still marked `pending` (present since Phase 4).
+
 ## [0.7.0] — 2026-11-12 — Phase 7: Risk engine
 
 ### Added

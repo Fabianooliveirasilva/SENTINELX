@@ -16,7 +16,7 @@ intelligence, prioritize risk with a transparent model, monitor security events,
 and generate evidence-based reports — with an optional AI analyst that explains
 findings and drafts remediation, never inventing evidence.
 
-> **Project status — Phase 7 (Risk engine) complete.** The platform skeleton,
+> **Project status — Phase 8 (Monitoring & events) complete.** The platform skeleton,
 > infrastructure, quality gates and architecture are in place. Security features
 > are delivered phase by phase; see the [roadmap](docs/ROADMAP.md).
 
@@ -37,7 +37,7 @@ findings and drafts remediation, never inventing evidence.
 | Vulnerabilities | OWASP ZAP (isolated daemon) and pinned, curated Nuclei behind a scope-enforcing egress guard; deterministic findings with deduplication, regressions, triage and evidence | ✅ Phase 5 |
 | Threat intel | Product-driven NVD CVE sync, CISA KEV, CPE version-range correlation into tentative CVE findings, software inventory | ✅ Phase 6 |
 | Risk | Deterministic, versioned risk scores (CVSS, confidence, asset context, KEV, EPSS, age) with factor-level explanations, project posture and trend, audited admin weights | ✅ Phase 7 |
-| Monitoring | Security events, alerts, timeline, audit logs | 🗓 Phase 8 |
+| Monitoring | Security event timeline, alert rules, signed webhooks and e-mail with retries, scheduled scans | ✅ Phase 8 |
 | AI analyst | Anthropic-backed explanations, summaries and remediation (optional) | 🗓 Phase 9 |
 | Reporting | PDF and JSON reports | 🗓 Phase 10 |
 

@@ -30,6 +30,7 @@ from app.models import Asset, AssetAuthorization, AuditLog
 from app.repositories.sql import LIKE_ESCAPE, contains_pattern
 from app.schemas.pagination import PageParams
 from app.services.audit import record_audit
+from app.services.events import EventType, emit
 from app.services.projects import ProjectService
 from app.services.risk import rescore, snapshot
 from sentinelx_security.scope import (
@@ -300,6 +301,16 @@ class AssetService:
             project_id=project_id,
             details={"type": asset.type, "value": asset.value},
         )
+        await emit(
+            self._session,
+            project_id=project_id,
+            event_type=EventType.ASSET_CREATED,
+            severity="info",
+            title=f"Asset registered: {asset.value}",
+            asset_id=asset.id,
+            details={"type": asset.type, "value": asset.value},
+            actor_email=principal.email,
+        )
         await self._session.commit()
         return await self.get(principal, project_id, asset.id)
 
@@ -337,6 +348,17 @@ class AssetService:
                 target_id=asset.id,
                 project_id=project_id,
                 details={"changes": changed},
+            )
+            await emit(
+                self._session,
+                project_id=project_id,
+                event_type=EventType.ASSET_UPDATED,
+                severity="info",
+                title=f"Asset {action.removeprefix('asset.')}: {asset.value}",
+                asset_id=asset.id,
+                details={"action": action, "changes": changed},
+                actor_email=principal.email,
+                dedup_key=f"asset.updated:{asset.id}:{action}",
             )
         if {"criticality", "exposure"} & set(changed):
             await rescore(self._session, trigger="asset_updated", asset_id=asset.id)
@@ -411,6 +433,22 @@ class AssetService:
                 "ip_ranges": authorization.ip_ranges,
             },
         )
+        await emit(
+            self._session,
+            project_id=project_id,
+            event_type=EventType.AUTHORIZATION_GRANTED,
+            severity="medium" if authorization.allow_intrusive else "info",
+            title=f"Scanning authorization recorded for {asset.value} ({authorization.reference})",
+            asset_id=asset.id,
+            details={
+                "authorization_id": str(authorization.id),
+                "reference": authorization.reference,
+                "valid_until": authorization.valid_until.isoformat(),
+                "allow_active": authorization.allow_active,
+                "allow_intrusive": authorization.allow_intrusive,
+            },
+            actor_email=principal.email,
+        )
         await self._session.commit()
         await self._session.refresh(authorization)
         return authorization
@@ -442,6 +480,16 @@ class AssetService:
             target_id=asset.id,
             project_id=project_id,
             details={"authorization_id": str(authorization.id), "reason": reason.strip()},
+        )
+        await emit(
+            self._session,
+            project_id=project_id,
+            event_type=EventType.AUTHORIZATION_REVOKED,
+            severity="low",
+            title=f"Scanning authorization revoked for {asset.value} ({authorization.reference})",
+            asset_id=asset.id,
+            details={"authorization_id": str(authorization.id), "reason": reason.strip()},
+            actor_email=principal.email,
         )
         await self._session.commit()
         await self._session.refresh(authorization)

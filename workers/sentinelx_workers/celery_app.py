@@ -36,6 +36,7 @@ def create_celery_app(settings: Settings) -> Celery:
             "sentinelx_workers.tasks.scans",
             "sentinelx_workers.tasks.intel",
             "sentinelx_workers.tasks.risk",
+            "sentinelx_workers.tasks.monitoring",
         ],
     )
     app.conf.update(
@@ -74,6 +75,16 @@ def create_celery_app(settings: Settings) -> Celery:
                 "task": "sentinelx.intel.sync_epss",
                 "schedule": 24 * 3600.0,
                 "options": {"queue": "intel"},
+            },
+            "deliver-notifications": {
+                "task": "sentinelx.monitoring.deliver",
+                "schedule": 30.0,
+                "options": {"queue": "notifications", "expires": 25},
+            },
+            "run-scan-schedules": {
+                "task": "sentinelx.monitoring.run_schedules",
+                "schedule": 60.0,
+                "options": {"queue": ORCHESTRATOR_QUEUE, "expires": 55},
             },
             "sync-kev": {
                 "task": "sentinelx.intel.sync_kev",

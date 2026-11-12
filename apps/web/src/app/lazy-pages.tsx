@@ -37,6 +37,11 @@ const ProjectRiskPage = lazy(() =>
   import("@/features/risk/project-risk-page").then((m) => ({ default: m.ProjectRiskPage })),
 );
 const RiskModelPage = lazy(() => import("@/features/risk/risk-model-page").then((m) => ({ default: m.RiskModelPage })));
+const EventsPage = lazy(() => import("@/features/monitoring/events-page").then((m) => ({ default: m.EventsPage })));
+const AlertsPage = lazy(() => import("@/features/monitoring/alerts-page").then((m) => ({ default: m.AlertsPage })));
+const SchedulesPage = lazy(() =>
+  import("@/features/monitoring/schedules-page").then((m) => ({ default: m.SchedulesPage })),
+);
 const AccountPage = lazy(() => import("@/features/settings/account-page").then((m) => ({ default: m.AccountPage })));
 
 function Loading({ children }: { children: ReactNode }) {
@@ -128,5 +133,20 @@ export const ProjectRiskRoute = () => (
 export const RiskModelRoute = () => (
   <Loading>
     <RiskModelPage />
+  </Loading>
+);
+export const EventsRoute = () => (
+  <Loading>
+    <EventsPage />
+  </Loading>
+);
+export const AlertsRoute = () => (
+  <Loading>
+    <AlertsPage />
+  </Loading>
+);
+export const SchedulesRoute = () => (
+  <Loading>
+    <SchedulesPage />
   </Loading>
 );

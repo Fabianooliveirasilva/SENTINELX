@@ -14,7 +14,7 @@ documentation and an explicit approval before the next phase starts.
 | 5 | Vulnerability assessment | OWASP ZAP baseline (active only with explicit authorization), Nuclei curated/pinned templates, HTTP security checks, findings normalization, evidence, lifecycle states | **Delivered** |
 | 6 | Threat intelligence | NVD sync with rate limits and caching, CVE/CWE/CPE, version-range matching with confidence, provenance | **Delivered** |
 | 7 | Risk engine | Deterministic, versioned, explainable risk model; configurable weights | **Delivered** |
-| 8 | Monitoring & events | Event ingestion, alerts, timeline, filters, notification abstraction (email/webhook ready) | Planned |
+| 8 | Monitoring & events | Event ingestion, alerts, timeline, filters, notification abstraction (email/webhook ready) | **Delivered** |
 | 9 | AI security analyst | Anthropic provider abstraction, structured outputs, prompt versioning, prompt-injection defenses, budgets, deterministic fallback | Planned |
 | 10 | Reporting | PDF + JSON reports with scope, methodology, evidence, tool versions, AI content labeled | Planned |
 | 11 | Dashboard & UX completion | Dashboard on real data, remaining pages, accessibility pass | Planned |
@@ -168,16 +168,48 @@ the intel worker fetched live EPSS scores for 93 CVEs and the daily task rescore
 breakdown such as *"Critical risk (100/100): starts at 91 from CVSS 9.1; known
 exploited +20.0, confidence −18.2, exploit prediction +15.0."*
 
-## Phase 8 proposal — Monitoring & events
+## Phase 8 — delivered
 
-* `security_events` timeline per project: new/reopened/resolved findings, risk
-  band changes, new KEV listings for observed software, certificate expiry
-  approaching, scan failures and scope denials, emergency stops.
-* Alert rules (per project): conditions on event type, risk band, KEV, asset;
-  de-duplication and quiet periods.
-* Notification abstraction with e-mail and signed webhooks (HMAC, retries with
-  backoff, delivery log); secrets stored encrypted.
-* Scheduled scans (cron-like, per asset/scanner/profile) honouring authorization
-  windows, quotas and the emergency stop.
-* UI: project timeline with filters, alert rules, notification channels, scan
-  schedules.
+| # | Criterion | Verification |
+|---|-----------|--------------|
+| 1 | `security_events` timeline written in the same transaction as the change: new/reopened/resolved findings, analyst status changes, risk-band changes, new CISA KEV listings, certificate expiry, scan completed/failed/cancelled/scope-denied, emergency stop/resume, asset and authorization changes, skipped schedules | `test_scans_and_findings_populate_the_timeline`, `test_failed_scans_triage_and_emergency_stop_are_events`, `test_kev_listing_emits_an_event_once`, `test_risk_band_changes_are_events` |
+| 2 | Timeline API with type, minimum severity, asset and period filters; 7-day severity summary; project isolation | same tests, `test_timeline_is_project_isolated` |
+| 3 | Per-project alert rules (event types, severity floor, optional asset, channels) with quiet periods; suppressed repeats are recorded, not sent | `test_rules_match_severity_type_and_quiet_period`, `test_rule_matching` |
+| 4 | Notification outbox delivered by a dedicated `notifier` worker: e-mail (new SMTP backend, STARTTLS/TLS, verified certificates) and HMAC-signed webhooks; retries with exponential backoff, permanent failure on 4xx, delivery log | `test_webhook_delivery_is_signed_and_pinned`, `test_failed_deliveries_retry_with_backoff_then_give_up`, `test_smtp_sender_uses_starttls_and_strips_header_injection` |
+| 5 | Webhook SSRF defenses: https only in production (re-checked per delivery), every resolved address policy-checked, request pinned to the checked IP with original Host/SNI, no redirects, no proxies, bodies never read; signing secrets generated server-side, shown once, encrypted at rest, never audited | `test_webhook_refuses_internal_destinations`, `test_channel_validation_and_secret_handling`, `test_production_refuses_cleartext_webhooks_at_delivery` |
+| 6 | Scheduled scans run through the interactive request path as their owner: membership, permission, authorization window, quotas and emergency stop re-checked on every run; skipped runs recorded and emitted; claim-before-run, no catch-up bursts | `test_schedules_start_scans_with_owner_authority`, `test_schedules_skip_when_controls_forbid_the_scan` |
+| 7 | New permission `alerts:manage` (admin, analyst) seeded by migration `0008`; RBAC catalog and database stay in sync | `test_database_rbac_seed_matches_code_catalog`, `test_alert_configuration_permissions` |
+| 8 | UI: project Events (timeline, filters, severity tiles), Alerts (rules, channels with one-time secret reveal, delivery log) and Schedules tabs | Vitest `monitoring.test.tsx`, Playwright `monitoring.spec.ts` |
+
+**Live verification.** With the real API, Celery beat, the orchestrator/notifier
+worker and the scanner sandbox running locally, a schedule started an HTTP scan
+through beat, the scan produced six findings and timeline events, and the alert
+rule (minimum severity *medium*) delivered only the *medium* finding — by e-mail
+and by webhook to a LAN receiver, whose `X-SentinelX-Signature` verified with the
+channel secret.
+
+**Fixed along the way.** The live test exposed a race present since Phase 4: the
+API published a scan's Celery chain before marking the job `queued`, so a fast
+worker could skip it. Jobs are now queued before publishing (fixed on the Phase 4
+branch and merged upward, with a regression test that runs a concurrent worker).
+
+**Limitations.** Schedules use fixed intervals (1 hour to 90 days) rather than cron
+expressions. An e-mail channel with several recipients is retried as a whole, so a
+partial SMTP failure can repeat the message to recipients that already got it.
+Alert rules match event type, severity and asset; richer conditions (risk band,
+KEV only, tags) can be expressed through event types today and may be added later.
+Compose, the `notifier` container and its egress network are verified in CI only.
+
+## Phase 9 proposal — AI security analyst
+
+* Provider abstraction with an Anthropic implementation (official SDK), optional:
+  the platform works unchanged without an API key; deterministic fallbacks.
+* Capabilities: explain a finding, summarize a scan, recommend remediation,
+  executive and technical summaries, compare two scans, suggest investigation steps.
+* Strict data minimization; scanner output, banners and page content passed as
+  clearly delimited untrusted data; no tool execution; structured outputs validated
+  with Pydantic; outputs labeled as AI-generated and tied to the evidence used.
+* Versioned prompts, per-request token/time limits, per-project daily budgets,
+  usage and cost accounting, and an `ai_analyses` table with provenance.
+* UI: "Explain / Recommend" on findings, scan summary, project AI Analyst page;
+  `ai:use` permission enforced server-side.

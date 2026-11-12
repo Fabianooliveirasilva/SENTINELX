@@ -141,6 +141,37 @@ Findings now include `risk_score`, `risk_band` and `cve_id`; the list accepts
 `risk_factors`, `risk_explanation`, `risk_model_version`, `risk_calculated_at` and
 `risk_history`. See [RISK_MODEL.md](RISK_MODEL.md).
 
+### Monitoring & events (Phase 8)
+
+| Method & path | Permission | Notes |
+|---------------|------------|-------|
+| `GET /events/types` | `events:read` | Catalog of event types with descriptions |
+| `GET /projects/{id}/events` | `events:read` | Timeline, newest first; filters `event_type` (repeatable), `min_severity`, `asset_id`, `since`, `until`; paginated |
+| `GET /projects/{id}/events/summary` | `events:read` | Counts by severity over `days` (default 7) |
+| `GET /projects/{id}/alert-rules` | `events:read` | Rules with their channels (names only) |
+| `POST /projects/{id}/alert-rules` | `alerts:manage` | `{name, event_types[], min_severity, asset_id?, quiet_period_minutes, channel_ids[]}` → 201 |
+| `PATCH`/`DELETE /projects/{id}/alert-rules/{rule_id}` | `alerts:manage` | Partial update / 204 |
+| `GET /projects/{id}/notification-channels` | `alerts:manage` | Destinations (recipients or URL); never the secret |
+| `POST /projects/{id}/notification-channels` | `alerts:manage` | `{name, kind: email\|webhook, recipients?, url?}` → 201; webhooks return `signing_secret` **once** |
+| `PATCH`/`DELETE /projects/{id}/notification-channels/{channel_id}` | `alerts:manage` | Rename, enable/disable, change destination / 204 |
+| `POST /projects/{id}/notification-channels/{channel_id}/rotate-secret` | `alerts:manage` | New signing secret, returned once |
+| `POST /projects/{id}/notification-channels/{channel_id}/test` | `alerts:manage` | 202; queues a `notification.test` delivery |
+| `GET /projects/{id}/notifications` | `alerts:manage` | Delivery log; filter `status` (pending/sent/failed/suppressed) |
+| `GET /projects/{id}/scan-schedules` | `scans:read` | Schedules with last run status and skip reason |
+| `POST /projects/{id}/scan-schedules` | `scans:execute` | `{asset_id, scanner, profile?, interval_hours (1–2160), first_run_at?}` → 201 |
+| `PATCH`/`DELETE /projects/{id}/scan-schedules/{schedule_id}` | `scans:execute` | Enable/disable, interval, profile, next run / 204; the editor becomes the owner |
+
+**Webhook deliveries** are `POST` requests with a JSON body
+`{"delivery_id": "...", "event": {id, type, severity, title, occurred_at, project_id, asset_id, finding_id, scan_job_id, actor, details}}`
+and the headers `X-SentinelX-Event`, `X-SentinelX-Delivery` and
+`X-SentinelX-Signature: t=<unix>,v1=<hex>`, where
+`v1 = HMAC-SHA256(secret, "<t>." + raw_body)`. Receivers should verify the
+signature with a constant-time comparison and reject timestamps older than a few
+minutes. Any 2xx is success; 408, 429 and 5xx are retried with exponential
+backoff; other statuses and refused destinations fail permanently.
+
+Event titles and details can contain scanner-derived text and must be rendered as text.
+
 Observation data and evidence originate from scanned systems and are untrusted;
 they are returned as JSON/text and must be rendered as text.
 
@@ -151,5 +182,5 @@ Authentication: `Authorization: Bearer <access_token>`. `401` responses include
 ## Planned resources
 
 
-`/events`, `/reports`, `/ai`, `/settings` —
+`/reports`, `/ai`, `/settings` —
 introduced phase by phase (see [ROADMAP.md](ROADMAP.md)).
