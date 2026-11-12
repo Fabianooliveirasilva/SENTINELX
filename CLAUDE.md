@@ -54,6 +54,7 @@ Pytest runs with `filterwarnings = error` and `-m "not integration"` by default.
 - `local-infra` — local Postgres + Redis for integration tests / live runs.
 - `stacked-branches` — propagate fixes across phase branches, push, check CI via the API.
 - `add-scanner` — checklist for new or changed scanner integrations.
+- `phase-delivery` — start/close a roadmap phase: Definition of Done, docs updates, report format, approval stop.
 
 ## Conventions
 
