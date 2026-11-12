@@ -43,12 +43,17 @@ Pytest runs with `filterwarnings = error` and `-m "not integration"` by default.
 ## Dev host constraints (this machine)
 
 - **No Docker.** Compose, Trivy and image builds are verified only in CI — report them as "not run locally".
-- Postgres: `pgserver` wheel in a scratchpad venv (port 54329, TCP). Scratchpad is wiped per session → reinstall.
-- Redis: `fakeredis` in tests; `fakeredis.TcpFakeServer` (+ `fakeredis[lua]`) as a local Redis for E2E/Celery.
+- Postgres (pgserver, :54329) + Redis (fakeredis TCP, :6390): start them with the `local-infra` skill; the scratchpad is wiped per session.
 - Node 22.19: React Router 8 and jsdom ≥30 are blocked; TypeScript pinned to 6.0.x.
 - The scope engine always blocks loopback; for live scan smoke tests use the LAN IP via `SENTINELX_SCOPE_LAB_NETWORKS`.
 - Fixtures: use `*.example.com` emails (email-validator rejects `.local`). Tests never hit public third-party hosts.
 - No `gh` CLI: the user opens PRs; check CI through the public GitHub Actions API.
+
+## Project skills (`.claude/skills/`)
+
+- `local-infra` — local Postgres + Redis for integration tests / live runs.
+- `stacked-branches` — propagate fixes across phase branches, push, check CI via the API.
+- `add-scanner` — checklist for new or changed scanner integrations.
 
 ## Conventions
 
