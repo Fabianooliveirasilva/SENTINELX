@@ -27,12 +27,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.context import Principal, RequestMeta
 from app.core.errors import ConflictError, InvalidRequestError, NotFoundError
-from app.models import Finding, FindingOccurrence, FindingStatusChange, ScanJob
+from app.models import (
+    Finding,
+    FindingOccurrence,
+    FindingRiskChange,
+    FindingStatusChange,
+    ScanJob,
+)
 from app.models.finding import FINDING_STATUSES, SEVERITIES
 from app.repositories.sql import LIKE_ESCAPE, contains_pattern
 from app.schemas.pagination import PageParams
 from app.services.audit import record_audit
 from app.services.projects import ProjectService
+from app.services.risk import rescore, snapshot
 from sentinelx_security.findings import RULESET_VERSION, FindingCandidate, derive_findings
 
 ACTIVE_FINDING_STATUSES: Final = ("open", "acknowledged")
@@ -68,6 +75,8 @@ class FindingFilters:
     source: str | None = None
     search: str | None = None
     active_only: bool = False
+    risk_band: str | None = None
+    sort: str = "risk"
 
 
 def _by(scope: IngestScope) -> str:
@@ -121,6 +130,7 @@ async def ingest_candidates(
     now = utcnow()
     asset_key = str(scope.asset_id)
     seen: set[str] = set()
+    touched: list[uuid.UUID] = []
     new = updated = reopened = 0
 
     for candidate in candidates:
@@ -145,6 +155,7 @@ async def ingest_candidates(
             "confidence": candidate.confidence.value,
             "cwe": candidate.cwe,
             "references": [r[:500] for r in candidate.references],
+            "cve_id": candidate.rule_id[4:36] if candidate.rule_id.startswith("cve.") else None,
         }
         if finding is None:
             finding = Finding(
@@ -188,6 +199,7 @@ async def ingest_candidates(
                 reopened += 1
             else:
                 updated += 1
+        touched.append(finding.id)
         session.add(
             FindingOccurrence(
                 finding_id=finding.id,
@@ -226,6 +238,11 @@ async def ingest_candidates(
         finding.status = "resolved"
         finding.status_reason = "No longer observed."
         finding.resolved_at = now
+    await rescore(
+        session,
+        trigger="scan" if scope.scan_job_id else "correlation",
+        finding_ids=touched,
+    )
     return IngestResult(new=new, updated=updated, reopened=reopened, resolved=len(stale))
 
 
@@ -249,6 +266,8 @@ class FindingService:
             stmt = stmt.where(Finding.status.in_(ACTIVE_FINDING_STATUSES))
         if filters.severity:
             stmt = stmt.where(Finding.severity == filters.severity)
+        if filters.risk_band:
+            stmt = stmt.where(Finding.risk_band == filters.risk_band)
         if filters.asset_id:
             stmt = stmt.where(Finding.asset_id == filters.asset_id)
         if filters.source:
@@ -267,10 +286,15 @@ class FindingService:
             ).scalar_one()
         )
         severity_order = func.array_position(list(SEVERITIES), Finding.severity)
+        order = {
+            "risk": (Finding.risk_score.desc().nulls_last(), severity_order.desc()),
+            "severity": (severity_order.desc(), Finding.risk_score.desc().nulls_last()),
+            "last_seen": (Finding.last_seen_at.desc(),),
+        }.get(filters.sort, (Finding.risk_score.desc().nulls_last(),))
         rows = (
             (
                 await self._session.execute(
-                    stmt.order_by(severity_order.desc(), Finding.last_seen_at.desc())
+                    stmt.order_by(*order, Finding.last_seen_at.desc())
                     .offset(params.offset)
                     .limit(params.page_size)
                 )
@@ -335,6 +359,21 @@ class FindingService:
         )
         return finding, occurrences, history
 
+    async def risk_history(self, finding_id: uuid.UUID) -> Sequence[FindingRiskChange]:
+        """Caller must have loaded the finding through :meth:`get` (tenancy check)."""
+        return (
+            (
+                await self._session.execute(
+                    select(FindingRiskChange)
+                    .where(FindingRiskChange.finding_id == finding_id)
+                    .order_by(FindingRiskChange.calculated_at.desc())
+                    .limit(20)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
     async def change_status(
         self,
         principal: Principal,
@@ -376,6 +415,7 @@ class FindingService:
         finding.status = status
         finding.status_reason = reason or None
         finding.resolved_at = utcnow() if status == "resolved" else None
+        await snapshot(self._session, project_id)
         record_audit(
             self._session,
             action="finding.status_changed",

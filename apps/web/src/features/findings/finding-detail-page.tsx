@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Select, Textarea } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useCan } from "@/features/auth/use-auth";
 import { ProjectTabs } from "@/features/projects/project-tabs";
 import { formatDateTime } from "@/lib/format";
@@ -24,7 +25,7 @@ import {
   type FindingDetail,
   type FindingStatus,
 } from "./api";
-import { SeverityBadge } from "./severity";
+import { RiskScore, SeverityBadge } from "./severity";
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -163,6 +164,55 @@ export function FindingDetailPage() {
                 <Field label="Last seen">{formatDateTime(f.last_seen_at)}</Field>
                 <Field label="Occurrences">{f.occurrence_count}</Field>
               </dl>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Risk</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <RiskScore score={f.risk_score} band={f.risk_band} />
+              {f.risk_explanation ? <p className="text-sm">{f.risk_explanation}</p> : null}
+              {f.risk_factors.length > 0 ? (
+                <Table aria-label="Risk factors">
+                  <THead>
+                    <tr>
+                      <TH>Factor</TH>
+                      <TH>Value</TH>
+                      <TH>Effect</TH>
+                      <TH className="text-right">Points</TH>
+                    </tr>
+                  </THead>
+                  <TBody>
+                    {f.risk_factors.map((factor) => (
+                      <TR key={factor.name}>
+                        <TD className="text-sm">
+                          {factor.name.replaceAll("_", " ")}
+                          <span className="block text-xs text-muted-foreground">{factor.reason}</span>
+                        </TD>
+                        <TD className="text-sm">{factor.value}</TD>
+                        <TD className="font-mono text-xs">{factor.effect}</TD>
+                        <TD className="text-right font-mono text-sm tabular-nums">
+                          {factor.points >= 0 ? "+" : ""}
+                          {factor.points.toFixed(1)}
+                        </TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </Table>
+              ) : null}
+              <p className="text-xs text-muted-foreground">
+                Model {f.risk_model_version ?? "—"} · calculated {formatDateTime(f.risk_calculated_at)}
+              </p>
+              {f.risk_history.length > 1 ? (
+                <ol aria-label="Risk history" className="space-y-1 text-xs text-muted-foreground">
+                  {f.risk_history.map((h) => (
+                    <li key={h.calculated_at}>
+                      {formatDateTime(h.calculated_at)} — {h.score.toFixed(1)} ({h.band}) after {h.trigger.replaceAll("_", " ")}
+                    </li>
+                  ))}
+                </ol>
+              ) : null}
             </CardContent>
           </Card>
           <Card>

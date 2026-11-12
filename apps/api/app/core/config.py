@@ -117,6 +117,7 @@ class Settings(BaseSettings):
     kev_url: str = (
         "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
     )
+    epss_url: str = "https://api.first.org/data/v1/epss"
     intel_product_ttl_hours: int = Field(default=24, ge=1, le=24 * 30)
     intel_max_products_per_run: int = Field(default=20, ge=1, le=500)
 
@@ -189,7 +190,7 @@ class Settings(BaseSettings):
     def _empty_key_is_none(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value
 
-    @field_validator("nvd_base_url", "kev_url")
+    @field_validator("nvd_base_url", "kev_url", "epss_url")
     @classmethod
     def _validate_intel_urls(cls, value: str) -> str:
         parts = urlsplit(value)

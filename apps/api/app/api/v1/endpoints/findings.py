@@ -16,10 +16,14 @@ from app.schemas.findings import (
     FindingDetail,
     FindingOccurrenceRead,
     FindingRead,
+    FindingSort,
     FindingStatus,
     FindingStatusChangeRead,
     FindingStatusUpdate,
     FindingSummary,
+    RiskBand,
+    RiskChangeRead,
+    RiskFactorRead,
     Severity,
 )
 from app.schemas.pagination import Page, PageParams, page_params
@@ -44,6 +48,8 @@ async def list_findings(
     source: Annotated[str | None, Query(pattern=r"^[a-z]{2,32}$")] = None,
     search: Annotated[str | None, Query(max_length=200)] = None,
     active: Annotated[bool, Query(description="Only open or acknowledged findings")] = False,
+    risk_band: RiskBand | None = None,
+    sort: FindingSort = "risk",
 ) -> Page[FindingRead]:
     rows, total = await service.list(
         principal,
@@ -56,6 +62,8 @@ async def list_findings(
             source=source,
             search=search,
             active_only=active,
+            risk_band=risk_band,
+            sort=sort,
         ),
     )
     return Page(
@@ -86,6 +94,13 @@ async def get_finding(
         ruleset_version=finding.ruleset_version,
         occurrences=[FindingOccurrenceRead.model_validate(o) for o in occurrences],
         history=[FindingStatusChangeRead.model_validate(h) for h in history],
+        risk_factors=[RiskFactorRead.model_validate(f) for f in finding.risk_factors],
+        risk_explanation=finding.risk_explanation,
+        risk_model_version=finding.risk_model_version,
+        risk_calculated_at=finding.risk_calculated_at,
+        risk_history=[
+            RiskChangeRead.model_validate(r) for r in await service.risk_history(finding.id)
+        ],
     )
 
 

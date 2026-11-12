@@ -68,7 +68,22 @@ test (RBAC seed rows are preserved). Redis-dependent behavior in API tests uses
 > Integration tests **truncate** the database they point at. Never run them
 > against a database holding data you want to keep.
 
-## Latest results (Phase 6, local run 2026-11-12)
+## Latest results (Phase 7, local run 2026-11-12)
+
+| Suite | Result |
+|-------|--------|
+| Security engine (incl. risk model, EPSS client) | 264 passed, 1 skipped (real Nmap binary absent locally) |
+| Backend full suite (unit + integration + engine + workers, PostgreSQL 16 local) | 486 passed; the 2 real-Redis tests run in CI; coverage 95% |
+| Frontend (Vitest) | 58 passed |
+| E2E (Playwright, Chromium, real API + PostgreSQL) | 8 passed |
+| Live risk smoke (scan → NVD correlation → **live FIRST EPSS** → daily rescoring) | EPSS applied to 93 CVEs; 105 findings rescored; KEV + high-EPSS CVEs ranked first with factor breakdowns |
+| Ruff / mypy strict / ESLint strict / tsc / Bandit | clean |
+
+Risk tests assert that factor contributions always sum to the stored score, that
+each risk input moves the score in the expected direction, and that the project
+posture is never below the worst active finding.
+
+## Phase 6 results (local run 2026-11-12)
 
 | Suite | Result |
 |-------|--------|

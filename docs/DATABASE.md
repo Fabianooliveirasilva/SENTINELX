@@ -83,7 +83,10 @@ erDiagram
 CVE findings are regular `findings` rows (`rule_id = cve.<CVE-ID>`, `source = intel`,
 `confidence = tentative`); the CVE, CPE criterion and matched range are kept in
 the occurrence snapshot, so no separate `finding_cves` table is needed.
-| `risk_assessments` | finding_id, model_version, original_cvss, score, category, factors (jsonb), explanation, calculated_at | Deterministic & versioned |
+| `findings` risk columns ✅ | cve_id, risk_score, risk_band, risk_model_version, risk_factors (jsonb), risk_explanation, risk_calculated_at | Current score stored on the finding (Phase 7); index (project_id, risk_score) |
+| `finding_risk_changes` ✅ | finding_id, score, band, model_version, trigger, factors (jsonb), calculated_at | Written only when score/band/model changes |
+| `project_risk_snapshots` ✅ | project_id, day (unique together), score, band, active, counts (jsonb), model_version | Daily posture for trends |
+| `cves` EPSS columns ✅ | epss_score, epss_percentile, epss_scored_on | FIRST EPSS, refreshed daily for CVEs in active findings |
 | `security_events` | project_id, type, severity, asset_id, finding_id, payload (jsonb), occurred_at | Timeline; indexed by (project_id, occurred_at) |
 | `audit_logs` | project_id (nullable), actor_id, action, target_type, target_id, ip, user_agent, correlation_id, metadata (jsonb), created_at | Append-only |
 | `ai_analyses` | project_id, subject_type, subject_id, provider, model, prompt_version, input_hash, output (jsonb), tokens_in/out, cost_estimate, status | AI output stored separately from evidence |

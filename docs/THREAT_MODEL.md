@@ -86,6 +86,7 @@ TB1 user→platform · TB2 app→data stores · TB3 worker→sandbox · TB4 sand
 | T24 | T | Analyst triage silently undone by automation | `false_positive`/`accepted_risk` never reopened or auto-resolved; every status change kept in `finding_status_changes` and the audit log | **Implemented** |
 | T25 | T/S | Poisoned or spoofed intelligence feed (fake CVEs, altered ranges) leading to false findings or missed ones | Feeds fetched only from fixed HTTPS endpoints (NVD API 2.0, CISA KEV; URLs validated as https), responses size-capped and schema-checked, rejected CVEs skipped, provenance and fetch time stored, CVE findings always `tentative` | **Implemented** |
 | T26 | D | NVD rate limiting / outage blocks correlation | Product-driven sync (only observed products), per-product TTL, request spacing per NVD guidance, bounded retries, errors recorded per product; correlation keeps working on stored data | **Implemented** |
+| T27 | T/R | Risk ranking manipulated to hide issues (weights set to zero, silent formula changes) | Weights bounded (e.g. severity defaults and multipliers cannot be zero), admin-only, audited with before/after values; formula changes require a new model version stored with every score; history of every score change | **Implemented** |
 
 ## 5. Residual risks and assumptions
 

@@ -10,6 +10,8 @@ from pydantic import BaseModel, ConfigDict, StringConstraints
 
 Severity = Literal["info", "low", "medium", "high", "critical"]
 Confidence = Literal["tentative", "firm", "confirmed"]
+RiskBand = Literal["info", "low", "medium", "high", "critical"]
+FindingSort = Literal["risk", "severity", "last_seen"]
 FindingStatus = Literal["open", "acknowledged", "false_positive", "accepted_risk", "resolved"]
 
 
@@ -34,6 +36,9 @@ class FindingRead(BaseModel):
     resolved_at: datetime | None
     occurrence_count: int
     last_scan_job_id: uuid.UUID | None
+    cve_id: str | None
+    risk_score: float | None
+    risk_band: RiskBand | None
 
 
 class FindingOccurrenceRead(BaseModel):
@@ -56,6 +61,24 @@ class FindingStatusChangeRead(BaseModel):
     created_at: datetime
 
 
+class RiskFactorRead(BaseModel):
+    name: str
+    value: str
+    effect: str
+    points: float
+    reason: str
+
+
+class RiskChangeRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    score: float
+    band: RiskBand
+    model_version: str
+    trigger: str
+    calculated_at: datetime
+
+
 class FindingDetail(FindingRead):
     description: str
     remediation: str
@@ -63,6 +86,11 @@ class FindingDetail(FindingRead):
     ruleset_version: str
     occurrences: list[FindingOccurrenceRead]
     history: list[FindingStatusChangeRead]
+    risk_factors: list[RiskFactorRead]
+    risk_explanation: str | None
+    risk_model_version: str | None
+    risk_calculated_at: datetime | None
+    risk_history: list[RiskChangeRead]
 
 
 class FindingStatusUpdate(BaseModel):

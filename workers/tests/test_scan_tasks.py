@@ -71,6 +71,10 @@ def test_intel_tasks_run_on_their_own_queue() -> None:
     schedule = celery_app.conf.beat_schedule
     assert schedule["refresh-intel-products"]["options"]["queue"] == "intel"
     assert schedule["sync-kev"]["options"]["queue"] == "intel"
+    assert schedule["sync-epss"]["options"]["queue"] == "intel"
+    assert schedule["risk-daily"]["task"] == "sentinelx.risk.daily"
+    assert schedule["risk-daily"]["options"]["queue"] == ORCHESTRATOR_QUEUE
+    assert {"sentinelx.intel.sync_epss", "sentinelx.risk.daily"} <= set(celery_app.tasks)
 
 
 def test_dispatcher_publishes_a_three_step_chain(monkeypatch: pytest.MonkeyPatch) -> None:

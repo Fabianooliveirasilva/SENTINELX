@@ -22,3 +22,13 @@ export function SeverityBadge({ severity }: { severity: Severity }) {
     </span>
   );
 }
+
+export function RiskScore({ score, band }: { score: number | null; band: Severity | null }) {
+  if (score === null || band === null) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <span className="inline-flex items-center gap-2" aria-label={`Risk ${String(score)} (${band})`}>
+      <span className="font-mono text-sm font-semibold tabular-nums">{score.toFixed(1)}</span>
+      <SeverityBadge severity={band} />
+    </span>
+  );
+}

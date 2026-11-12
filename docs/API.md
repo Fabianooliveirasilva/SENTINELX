@@ -127,6 +127,20 @@ Readiness probe; checks PostgreSQL and Redis concurrently with a timeout.
 | `POST /intelligence/products/sync` | `settings:manage` | `{vendor, product}` → **202**; queues an NVD refresh (audited) |
 | `GET /projects/{id}/software` | `assets:read` | Software inventory (product, version, location, CPE mapping, correlatable) |
 
+### Risk (Phase 7)
+
+| Method & path | Permission | Notes |
+|---------------|------------|-------|
+| `GET /risk/model` | `findings:read` | Model version, formula, bands, current/default weights and bounds |
+| `PUT /risk/weights` | `settings:manage` | `{weights: {...}}` (partial allowed); validated, audited, rescores every finding; returns the count changed |
+| `POST /risk/weights/reset` | `settings:manage` | Restore defaults and rescore |
+| `GET /projects/{id}/risk` | `findings:read` | Posture (score, band, counts), top 10 risks, 30-day trend |
+
+Findings now include `risk_score`, `risk_band` and `cve_id`; the list accepts
+`risk_band` and `sort=risk|severity|last_seen` (default `risk`); the detail adds
+`risk_factors`, `risk_explanation`, `risk_model_version`, `risk_calculated_at` and
+`risk_history`. See [RISK_MODEL.md](RISK_MODEL.md).
+
 Observation data and evidence originate from scanned systems and are untrusted;
 they are returned as JSON/text and must be rendered as text.
 

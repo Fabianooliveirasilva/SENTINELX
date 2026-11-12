@@ -72,6 +72,9 @@ class Cve(Base):
     kev_added_on: Mapped[date | None] = mapped_column(Date)
     kev_due_on: Mapped[date | None] = mapped_column(Date)
     kev_ransomware: Mapped[str | None] = mapped_column(String(20))
+    epss_score: Mapped[float | None] = mapped_column(Float)
+    epss_percentile: Mapped[float | None] = mapped_column(Float)
+    epss_scored_on: Mapped[date | None] = mapped_column(Date)
     fetched_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, server_default=text("now()")
     )
