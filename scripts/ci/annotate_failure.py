@@ -22,7 +22,11 @@ MAX_CHARS = 3500
 
 def annotate(title: str, message: str) -> None:
     text = message[-MAX_CHARS:].replace("%", "%25").replace("\r", "").replace("\n", "%0A")
-    print(f"::error title={title}::{text}")
+    # Property values must also escape ':' and ',' or GitHub drops the annotation.
+    safe_title = (
+        title.replace("%", "%25").replace(":", "%3A").replace(",", "%2C").replace("\n", " ")
+    )
+    print(f"::error title={safe_title}::{text}")
 
 
 def containers() -> None:
