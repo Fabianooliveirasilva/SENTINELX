@@ -34,6 +34,11 @@ from sentinelx_security.scope import NetworkPolicy, ScopeEngine, StaticResolver,
 
 ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
 TENANT_TABLES = (
+    "software_components",
+    "cve_matches",
+    "cves",
+    "intel_product_syncs",
+    "intel_sources",
     "finding_occurrences",
     "finding_status_changes",
     "findings",
@@ -80,6 +85,14 @@ class RecordingDispatcher:
         self.revoked.append(task_id)
 
 
+class RecordingIntelDispatcher:
+    def __init__(self) -> None:
+        self.refreshes = 0
+
+    def refresh_products(self) -> None:
+        self.refreshes += 1
+
+
 class MemoryEmailSender:
     def __init__(self) -> None:
         self.outbox: list[EmailMessage] = []
@@ -118,6 +131,7 @@ class ApiStack:
     email: MemoryEmailSender
     settings: Settings
     dispatcher: RecordingDispatcher
+    intel_dispatcher: RecordingIntelDispatcher
     users: dict[str, User] = field(default_factory=dict)
 
     async def create_user(
@@ -187,9 +201,16 @@ async def stack(migrated_database: None, stack_settings: Settings) -> AsyncItera
         app.state.email_sender = email
         dispatcher = RecordingDispatcher()
         app.state.scan_dispatcher = dispatcher
+        intel_dispatcher = RecordingIntelDispatcher()
+        app.state.intel_dispatcher = intel_dispatcher
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             yield ApiStack(
-                app=app, client=client, email=email, settings=stack_settings, dispatcher=dispatcher
+                app=app,
+                client=client,
+                email=email,
+                settings=stack_settings,
+                dispatcher=dispatcher,
+                intel_dispatcher=intel_dispatcher,
             )
         await app.state.redis.aclose()

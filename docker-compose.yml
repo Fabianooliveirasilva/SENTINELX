@@ -10,6 +10,7 @@
 #   frontend    (bridge, 172.30.10.0/24)          -> web (fixed IP), api
 #   scan-egress (bridge, outbound)                -> scanner, scanner-zap (the only containers
 #               that talk to scan targets; no database credentials or secret key)
+#   intel-egress (bridge, outbound)               -> intel only (NVD API and CISA KEV feed)
 #   zap-net     (internal: no outbound)           -> zap, scanner-zap. ZAP's ONLY route out is
 #               the egress guard inside scanner-zap, which admits the authorized
 #               origin only and connects to the scope engine's pinned addresses.
@@ -193,6 +194,38 @@ services:
       resources:
         limits: { cpus: "1.0", memory: 512M }
 
+  # Threat-intelligence worker: the only database-connected container with egress,
+  # used solely for the NVD API and the CISA KEV feed.
+  intel:
+    <<: *app
+    command:
+      - celery
+      - -A
+      - sentinelx_workers.celery_app:celery_app
+      - worker
+      - --queues=intel
+      - --concurrency=1
+      - --loglevel=INFO
+      - --without-gossip
+      - --without-mingle
+    environment:
+      <<: *app-env
+      SENTINELX_NVD_API_KEY: ${SENTINELX_NVD_API_KEY:-}
+      SENTINELX_INTEL_ENABLED: ${SENTINELX_INTEL_ENABLED:-true}
+    networks: [backend, intel-egress]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A sentinelx_workers.celery_app:celery_app inspect ping -d celery@$$HOSTNAME --timeout 5 | grep -q pong"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 384M }
+
   # ZAP scans run one at a time on their own queue: the ZAP daemon holds a single
   # session. This worker hosts the egress guard ZAP must use (port 8899).
   scanner-zap:
@@ -305,6 +338,8 @@ networks:
     driver: bridge
   zap-net:
     internal: true
+  intel-egress:
+    driver: bridge
   frontend:
     ipam:
       config:

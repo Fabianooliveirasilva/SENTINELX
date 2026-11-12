@@ -12,7 +12,7 @@ documentation and an explicit approval before the next phase starts.
 | 3 | Assets & scope enforcement | Asset inventory (domain, subdomain, IP, web app, API endpoint, service), authorization records, scope engine (DNS rebinding, private ranges, IPv6, redirects, SSRF), asset history, inventory UI | **Delivered** |
 | 4 | Scan orchestration & reconnaissance | Job model & states, scanner interface (`validate_scope/execute/normalize_results/handle_errors/record_evidence`), sandbox runner, DNS analyzer, passive subdomain discovery, TLS analyzer, Nmap safe profiles, technology fingerprinting | **Delivered** |
 | 5 | Vulnerability assessment | OWASP ZAP baseline (active only with explicit authorization), Nuclei curated/pinned templates, HTTP security checks, findings normalization, evidence, lifecycle states | **Delivered** |
-| 6 | Threat intelligence | NVD sync with rate limits and caching, CVE/CWE/CPE, version-range matching with confidence, provenance | Planned |
+| 6 | Threat intelligence | NVD sync with rate limits and caching, CVE/CWE/CPE, version-range matching with confidence, provenance | **Delivered** |
 | 7 | Risk engine | Deterministic, versioned, explainable risk model; configurable weights | Planned |
 | 8 | Monitoring & events | Event ingestion, alerts, timeline, filters, notification abstraction (email/webhook ready) | Planned |
 | 9 | AI security analyst | Anthropic provider abstraction, structured outputs, prompt versioning, prompt-injection defenses, budgets, deterministic fallback | Planned |
@@ -30,7 +30,7 @@ documentation and an explicit approval before the next phase starts.
 | Functional Nmap integration | 4 ✅ |
 | Functional OWASP ZAP integration | 5 ✅ |
 | Controlled Nuclei integration | 5 ✅ |
-| CVE lookup and correlation | 6 |
+| CVE lookup and correlation | 6 ✅ |
 | Functional risk engine | 7 |
 | Monitoring and event history | 8 |
 | Anthropic API integration | 9 |
@@ -127,16 +127,38 @@ Containers workflow (the development host cannot run them); adapters are tested
 against recorded API responses and JSONL output. ZAP authenticated scanning and
 API-definition import (OpenAPI) are not implemented yet.
 
-## Phase 6 proposal — Threat intelligence
+## Phase 6 — delivered
 
-* NVD CVE API 2.0 client with API-key support, rate limiting, incremental sync
-  (`lastModStartDate`), caching and provenance; runs in a worker with a dedicated
-  egress path.
-* `cves`, `cpe_matches`, `cwes` tables; CPE 2.3 parsing and version-range
-  matching (incl./excl. bounds) with a confidence score; never asserting a CVE
-  from a product name alone.
-* Correlation of fingerprinted technologies (HTTP, Nmap `-sV`, Nuclei tech
-  templates) to CVEs as `tentative` findings with the matching evidence.
-* CVSS v3.1/v4.0 vectors on findings; KEV flag where available.
-* Intelligence UI: CVE search, CVE detail with affected configurations, links
-  from findings.
+| # | Criterion | Verification |
+|---|-----------|--------------|
+| 1 | NVD CVE API 2.0 client: pagination, API key, NVD rate-limit spacing, bounded retries/backoff, 120-day window splitting, size caps, defensive parsing (rejected CVEs, bad CPEs, non-https references) | `security-engine/tests/test_intel.py` (real NVD responses as fixtures) |
+| 2 | CPE 2.3 parsing (escapes) and version-range matching with inclusive/exclusive bounds; pre-release vs patch suffixes (`1.0rc1 < 1.0`, `1.0.2k > 1.0.2`, `8.9p1 > 8.9`) | `test_compare_versions`, `test_range_matching_respects_every_bound` |
+| 3 | Software inventory from HTTP, Nmap `-sV` and Nuclei tech matches, curated CPE mapping; versionless or unmapped components never correlated | `test_inventory_extraction`, `test_versionless_components_never_match` |
+| 4 | CVE findings through the standard lifecycle (`tentative`, CVSS-based severity, KEV noted); upgrades auto-resolve; late NVD refresh re-correlates existing inventory | `test_scan_correlates_versions_and_resolves_after_upgrade`, `test_late_nvd_refresh_recorrelates_existing_inventory` |
+| 5 | CISA KEV catalog applied to stored CVEs; feed and per-product sync state with errors | `test_cve_search_detail_kev_and_status`, `test_refresh_errors_are_recorded_not_raised` |
+| 6 | Dedicated `intel` worker with feed-only egress; beat schedules product refresh (6 h) and KEV (24 h) | `test_intel_tasks_run_on_their_own_queue`, Containers workflow |
+| 7 | UI: Threat Intel page (sources, tracked products, CVE search with KEV filter), CVE detail (ranges, KEV, references), project Software tab, CVE links from findings | Vitest `intelligence.test.tsx`, Playwright |
+
+**Live verification.** A local lab server announcing `Apache/2.4.49` was scanned
+through the real pipeline; the intel worker fetched 956 CVEs for
+`apache:http_server` and `wordpress:wordpress` from the live NVD API and produced
+93 tentative CVE findings. Spot checks against NVD data: CVE-2021-41773 and
+CVE-2021-42013 (2.4.49 listed) matched; CVE-2021-40438 (≤ 2.4.48) and
+CVE-2017-9798 correctly did not.
+
+**Limitations.** No EPSS score yet; CPE mapping is a curated table (unknown
+products are inventoried but not correlated); configurations combining an
+application with a required platform (`AND` nodes) are evaluated on the
+vulnerable application criterion only.
+
+## Phase 7 proposal — Risk engine
+
+* Deterministic, versioned risk model (`risk_model_version`) computing a 0–100
+  score per finding from: base severity/CVSS, confidence, CISA KEV, EPSS (FIRST
+  API, optional), asset criticality and exposure, finding age, and evidence type.
+* Every score stored with its factor breakdown and a plain-language explanation;
+  re-scored when inputs change; history kept.
+* Configurable weights per platform (admin), with validation and audit.
+* Project risk posture: aggregated score, top risks, trend over time.
+* UI: risk column and sort on findings, factor breakdown on finding detail,
+  project risk overview.

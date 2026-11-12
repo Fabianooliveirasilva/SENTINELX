@@ -31,7 +31,11 @@ def create_celery_app(settings: Settings) -> Celery:
         "sentinelx",
         broker=settings.effective_celery_broker_url,
         backend=settings.effective_celery_result_backend,
-        include=["sentinelx_workers.tasks.system", "sentinelx_workers.tasks.scans"],
+        include=[
+            "sentinelx_workers.tasks.system",
+            "sentinelx_workers.tasks.scans",
+            "sentinelx_workers.tasks.intel",
+        ],
     )
     app.conf.update(
         task_serializer="json",
@@ -54,7 +58,17 @@ def create_celery_app(settings: Settings) -> Celery:
                 "task": "sentinelx.scans.expire_stale",
                 "schedule": 300.0,
                 "options": {"queue": ORCHESTRATOR_QUEUE},
-            }
+            },
+            "refresh-intel-products": {
+                "task": "sentinelx.intel.refresh_products",
+                "schedule": 6 * 3600.0,
+                "options": {"queue": "intel"},
+            },
+            "sync-kev": {
+                "task": "sentinelx.intel.sync_kev",
+                "schedule": 24 * 3600.0,
+                "options": {"queue": "intel"},
+            },
         },
     )
     return app

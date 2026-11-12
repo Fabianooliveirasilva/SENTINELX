@@ -10,6 +10,7 @@ from app.api.v1.endpoints import (
     auth,
     findings,
     health,
+    intelligence,
     projects,
     scans,
     users,
@@ -23,4 +24,5 @@ api_router.include_router(projects.router)
 api_router.include_router(assets.router)
 api_router.include_router(scans.router)
 api_router.include_router(findings.router)
+api_router.include_router(intelligence.router)
 api_router.include_router(audit_logs.router)

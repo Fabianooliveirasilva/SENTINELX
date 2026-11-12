@@ -117,6 +117,16 @@ Readiness probe; checks PostgreSQL and Redis concurrently with a timeout.
 `GET /scanners` now also lists `nuclei` (`baseline`, `exposures`) and `zap`
 (`baseline` = active, `full` = **intrusive**); each profile reports its technique.
 
+### Threat intelligence (Phase 6)
+
+| Method & path | Permission | Notes |
+|---------------|------------|-------|
+| `GET /intelligence/cves` | `intelligence:read` | Local CVE store, highest CVSS first. Filters: `search` (CVE ID or description), `severity`, `kev`, `vendor`, `product` |
+| `GET /intelligence/cves/{cve_id}` | `intelligence:read` | CVSS v3.1/v4.0, CWE, KEV dates, references, affected CPE ranges; 404 if not stored |
+| `GET /intelligence/status` | `intelligence:read` | Stored CVE/KEV counts, feed and per-product sync state, whether an NVD key is configured |
+| `POST /intelligence/products/sync` | `settings:manage` | `{vendor, product}` → **202**; queues an NVD refresh (audited) |
+| `GET /projects/{id}/software` | `assets:read` | Software inventory (product, version, location, CPE mapping, correlatable) |
+
 Observation data and evidence originate from scanned systems and are untrusted;
 they are returned as JSON/text and must be rendered as text.
 
@@ -127,5 +137,5 @@ Authentication: `Authorization: Bearer <access_token>`. `401` responses include
 ## Planned resources
 
 
-`/intelligence`, `/events`, `/reports`, `/ai`, `/settings` —
+`/events`, `/reports`, `/ai`, `/settings` —
 introduced phase by phase (see [ROADMAP.md](ROADMAP.md)).

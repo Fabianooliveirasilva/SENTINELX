@@ -24,6 +24,15 @@ const FindingsPage = lazy(() =>
 const FindingDetailPage = lazy(() =>
   import("@/features/findings/finding-detail-page").then((m) => ({ default: m.FindingDetailPage })),
 );
+const IntelligencePage = lazy(() =>
+  import("@/features/intelligence/intelligence-page").then((m) => ({ default: m.IntelligencePage })),
+);
+const CveDetailPage = lazy(() =>
+  import("@/features/intelligence/cve-detail-page").then((m) => ({ default: m.CveDetailPage })),
+);
+const SoftwarePage = lazy(() =>
+  import("@/features/intelligence/software-page").then((m) => ({ default: m.SoftwarePage })),
+);
 const AccountPage = lazy(() => import("@/features/settings/account-page").then((m) => ({ default: m.AccountPage })));
 
 function Loading({ children }: { children: ReactNode }) {
@@ -90,5 +99,20 @@ export const FindingsRoute = () => (
 export const FindingDetailRoute = () => (
   <Loading>
     <FindingDetailPage />
+  </Loading>
+);
+export const IntelligenceRoute = () => (
+  <Loading>
+    <IntelligencePage />
+  </Loading>
+);
+export const CveDetailRoute = () => (
+  <Loading>
+    <CveDetailPage />
+  </Loading>
+);
+export const SoftwareRoute = () => (
+  <Loading>
+    <SoftwarePage />
   </Loading>
 );

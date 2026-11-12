@@ -61,6 +61,18 @@ def test_beat_expires_stale_jobs() -> None:
     assert entry["options"]["queue"] == ORCHESTRATOR_QUEUE
 
 
+def test_intel_tasks_run_on_their_own_queue() -> None:
+    celery_app.loader.import_default_modules()
+    assert {
+        "sentinelx.intel.enrich",
+        "sentinelx.intel.refresh_products",
+        "sentinelx.intel.sync_kev",
+    } <= set(celery_app.tasks)
+    schedule = celery_app.conf.beat_schedule
+    assert schedule["refresh-intel-products"]["options"]["queue"] == "intel"
+    assert schedule["sync-kev"]["options"]["queue"] == "intel"
+
+
 def test_dispatcher_publishes_a_three_step_chain(monkeypatch: pytest.MonkeyPatch) -> None:
     app = Celery("test", broker="memory://")
     sent: list[dict[str, Any]] = []

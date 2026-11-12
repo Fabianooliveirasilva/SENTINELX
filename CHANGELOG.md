@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-11-12 — Phase 6: Threat intelligence
+
+### Added
+- `sentinelx_security.intel`: NVD CVE API 2.0 client (pagination, API key, rate
+  spacing, bounded backoff, window splitting, size caps, defensive parsing), CISA
+  KEV parser, CPE 2.3 parsing and version-range matching, software inventory
+  extraction and CVE correlation.
+- Tables `cves`, `cve_matches`, `intel_product_syncs`, `intel_sources`,
+  `software_components` (migration 0006).
+- Product-driven sync: products observed by scans are fetched from NVD by an
+  `intel` worker (own queue and egress network), refreshed after a TTL; KEV daily.
+- CVE findings (`cve.<ID>`, source `intel`, always `tentative`) through the
+  standard finding lifecycle; upgrades auto-resolve; late refreshes re-correlate.
+- API: CVE search/detail, intelligence status, admin product sync, project
+  software inventory. UI: Threat Intel page, CVE detail, Software tab, CVE links
+  from findings.
+
+### Changed
+- Finding ingestion generalized (`IngestScope`) so non-scan sources share the
+  same deduplication, regression and auto-resolution rules.
+
 ## [0.5.0] — 2026-11-11 — Phase 5: Vulnerability assessment
 
 ### Added

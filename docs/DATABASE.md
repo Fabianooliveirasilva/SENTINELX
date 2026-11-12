@@ -74,9 +74,15 @@ erDiagram
 | `findings` ✅ | project_id, asset_id, fingerprint (sha256 of asset + rule + location; unique per project), rule_id, ruleset_version, source, category, title, description, remediation, location, severity, confidence, cwe, references, status (open/acknowledged/false_positive/accepted_risk/resolved), status_reason, first/last_seen_at, resolved_at, last_scan_job_id, last_profile, occurrence_count | Deduplicated; check constraints on severity/confidence/status (Phase 5). CVSS arrives with threat intelligence (Phase 6) |
 | `finding_occurrences` ✅ | finding_id, scan_job_id, observed_at, observation (jsonb snapshot) | Evidence trail per sighting |
 | `finding_status_changes` ✅ | finding_id, from_status, to_status, reason, changed_by_id, changed_by_email, created_at | Lifecycle history (automatic changes have no user) |
-| `cves` | cve_id (unique), description, cvss_v3/v4 vectors & scores, cwe_ids, published_at, modified_at, references (jsonb), source, fetched_at | Provenance + timestamps |
-| `cpe_matches` | cve_id, cpe23, version_start/end (incl/excl), vulnerable | Version-range matching |
-| `finding_cves` | finding_id, cve_id, match_confidence, match_method | No CVE asserted from product name alone |
+| `cves` ✅ | id (CVE ID, PK), source, description, status, published/last_modified_at, preferred cvss (version, vector, score, severity), cvss31_*, cvss40_*, cwes, references, kev_added_on, kev_due_on, kev_ransomware, fetched_at | Provenance + timestamps (Phase 6) |
+| `cve_matches` ✅ | cve_id, criteria (CPE 2.3), vendor, product, version, update, start/end including/excluding | Only *vulnerable* criteria; indexed by (vendor, product) |
+| `intel_product_syncs` ✅ | (vendor, product) PK, requested_at, synced_at, status, cve_count, error | Product-driven NVD sync state |
+| `intel_sources` ✅ | name PK (e.g. `kev`), synced_at, status, version, records, error | Feed sync state |
+| `software_components` ✅ | project_id, asset_id, source (scanner), name, version, update, raw_version, cpes, location, correlatable, first/last_seen_at, last_scan_job_id | Inventory replaced per asset + scanner on every completed scan |
+
+CVE findings are regular `findings` rows (`rule_id = cve.<CVE-ID>`, `source = intel`,
+`confidence = tentative`); the CVE, CPE criterion and matched range are kept in
+the occurrence snapshot, so no separate `finding_cves` table is needed.
 | `risk_assessments` | finding_id, model_version, original_cvss, score, category, factors (jsonb), explanation, calculated_at | Deterministic & versioned |
 | `security_events` | project_id, type, severity, asset_id, finding_id, payload (jsonb), occurred_at | Timeline; indexed by (project_id, occurred_at) |
 | `audit_logs` | project_id (nullable), actor_id, action, target_type, target_id, ip, user_agent, correlation_id, metadata (jsonb), created_at | Append-only |

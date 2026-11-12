@@ -109,6 +109,7 @@ function TriageDialog({ projectId, finding }: { projectId: string; finding: Find
 export function FindingDetailPage() {
   const { projectId = "", findingId = "" } = useParams();
   const canWrite = useCan("findings:write");
+  const canReadIntel = useCan("intelligence:read");
   const finding = useQuery({
     queryKey: findingsKeys.detail(projectId, findingId),
     queryFn: () => getFinding(projectId, findingId),
@@ -146,7 +147,17 @@ export function FindingDetailPage() {
                 <Field label="Location">
                   <span className="font-mono">{f.location}</span>
                 </Field>
-                <Field label="Source">{f.source}</Field>
+                <Field label="Source">
+                  {f.source}
+                  {f.rule_id.startsWith("cve.") && canReadIntel ? (
+                    <Link
+                      to={`/intelligence/cves/${f.rule_id.slice(4)}`}
+                      className="ml-2 text-primary hover:underline"
+                    >
+                      {f.rule_id.slice(4)}
+                    </Link>
+                  ) : null}
+                </Field>
                 <Field label="CWE">{f.cwe ? `CWE-${String(f.cwe)}` : "—"}</Field>
                 <Field label="First seen">{formatDateTime(f.first_seen_at)}</Field>
                 <Field label="Last seen">{formatDateTime(f.last_seen_at)}</Field>

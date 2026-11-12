@@ -87,4 +87,11 @@ test("register an asset, authorize it and verify scope decisions", async ({ page
   await page.getByRole("navigation", { name: "Project sections" }).getByRole("link", { name: "Findings" }).click();
   await expect(page.getByRole("list", { name: "Open findings by severity" })).toBeVisible();
   await expect(page.getByText("No findings match these filters")).toBeVisible();
+
+  // Software inventory and threat intelligence are reachable.
+  await page.getByRole("navigation", { name: "Project sections" }).getByRole("link", { name: "Software" }).click();
+  await expect(page.getByText("No software observed yet")).toBeVisible();
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Threat Intel" }).click();
+  await expect(page.getByRole("heading", { name: "Threat intelligence" })).toBeVisible();
+  await expect(page.getByText("CVEs stored")).toBeVisible();
 });

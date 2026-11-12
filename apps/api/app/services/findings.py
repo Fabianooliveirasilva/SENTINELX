@@ -33,7 +33,7 @@ from app.repositories.sql import LIKE_ESCAPE, contains_pattern
 from app.schemas.pagination import PageParams
 from app.services.audit import record_audit
 from app.services.projects import ProjectService
-from sentinelx_security.findings import RULESET_VERSION, derive_findings
+from sentinelx_security.findings import RULESET_VERSION, FindingCandidate, derive_findings
 
 ACTIVE_FINDING_STATUSES: Final = ("open", "acknowledged")
 REASON_REQUIRED: Final = frozenset({"false_positive", "accepted_risk", "resolved"})
@@ -70,6 +70,10 @@ class FindingFilters:
     active_only: bool = False
 
 
+def _by(scope: IngestScope) -> str:
+    return f"scan {scope.scan_job_id}" if scope.scan_job_id else "intelligence re-correlation"
+
+
 def _history(
     finding: Finding,
     to_status: str,
@@ -89,13 +93,33 @@ def _history(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class IngestScope:
+    """Where candidates come from; auto-resolution is limited to the same scope."""
+
+    project_id: uuid.UUID
+    asset_id: uuid.UUID
+    source: str
+    profile: str
+    scan_job_id: uuid.UUID | None
+
+    @classmethod
+    def for_job(cls, job: ScanJob) -> IngestScope:
+        return cls(job.project_id, job.asset_id, job.scanner, job.profile, job.id)
+
+
 async def ingest_findings(
     session: AsyncSession, job: ScanJob, observations: Sequence[dict[str, Any]]
 ) -> IngestResult:
     """Create, update, reopen and auto-resolve findings for a completed scan."""
+    return await ingest_candidates(session, IngestScope.for_job(job), derive_findings(observations))
+
+
+async def ingest_candidates(
+    session: AsyncSession, scope: IngestScope, candidates: Sequence[FindingCandidate]
+) -> IngestResult:
     now = utcnow()
-    candidates = derive_findings(observations)
-    asset_key = str(job.asset_id)
+    asset_key = str(scope.asset_id)
     seen: set[str] = set()
     new = updated = reopened = 0
 
@@ -105,7 +129,7 @@ async def ingest_findings(
         finding = (
             await session.execute(
                 select(Finding)
-                .where(Finding.project_id == job.project_id, Finding.fingerprint == fingerprint)
+                .where(Finding.project_id == scope.project_id, Finding.fingerprint == fingerprint)
                 .with_for_update()
             )
         ).scalar_one_or_none()
@@ -124,37 +148,37 @@ async def ingest_findings(
         }
         if finding is None:
             finding = Finding(
-                project_id=job.project_id,
-                asset_id=job.asset_id,
+                project_id=scope.project_id,
+                asset_id=scope.asset_id,
                 fingerprint=fingerprint,
-                source=job.scanner,
+                source=scope.source,
                 status="open",
                 first_seen_at=now,
                 last_seen_at=now,
-                last_scan_job_id=job.id,
-                last_profile=job.profile,
+                last_scan_job_id=scope.scan_job_id,
+                last_profile=scope.profile,
                 occurrence_count=1,
                 **fields,
             )
             session.add(finding)
             await session.flush()
             session.add(
-                _history(finding, "open", f"First observed by scan {job.id}.", from_status=None)
+                _history(finding, "open", f"First observed by {_by(scope)}.", from_status=None)
             )
             new += 1
         else:
             for name, value in fields.items():
                 setattr(finding, name, value)
             finding.last_seen_at = now
-            finding.last_scan_job_id = job.id
-            finding.last_profile = job.profile
+            finding.last_scan_job_id = scope.scan_job_id
+            finding.last_profile = scope.profile
             finding.occurrence_count += 1
             if finding.status == "resolved":
                 session.add(
                     _history(
                         finding,
                         "open",
-                        f"Observed again by scan {job.id} (regression).",
+                        f"Observed again by {_by(scope)} (regression).",
                         from_status="resolved",
                     )
                 )
@@ -166,7 +190,9 @@ async def ingest_findings(
                 updated += 1
         session.add(
             FindingOccurrence(
-                finding_id=finding.id, scan_job_id=job.id, observation=dict(candidate.observation)
+                finding_id=finding.id,
+                scan_job_id=scope.scan_job_id,
+                observation=dict(candidate.observation),
             )
         )
 
@@ -175,10 +201,10 @@ async def ingest_findings(
             await session.execute(
                 select(Finding)
                 .where(
-                    Finding.project_id == job.project_id,
-                    Finding.asset_id == job.asset_id,
-                    Finding.source == job.scanner,
-                    Finding.last_profile == job.profile,
+                    Finding.project_id == scope.project_id,
+                    Finding.asset_id == scope.asset_id,
+                    Finding.source == scope.source,
+                    Finding.last_profile == scope.profile,
                     Finding.status.in_(ACTIVE_FINDING_STATUSES),
                     Finding.fingerprint.not_in(seen) if seen else Finding.fingerprint.is_not(None),
                 )
@@ -193,7 +219,7 @@ async def ingest_findings(
             _history(
                 finding,
                 "resolved",
-                f"Not observed by scan {job.id} ({job.scanner}/{job.profile}).",
+                f"Not observed by {_by(scope)} ({scope.source}/{scope.profile}).",
                 from_status=finding.status,
             )
         )

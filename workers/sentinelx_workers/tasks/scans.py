@@ -22,6 +22,8 @@ from app.services.scans import expire_stale_jobs, record_outcome, start_job
 from sentinelx_workers.celery_app import celery_app
 
 EXPIRE_TASK = "sentinelx.scans.expire_stale"
+INTEL_ENRICH_TASK = "sentinelx.intel.enrich"
+INTEL_QUEUE = "intel"
 
 logger = get_logger(__name__)
 
@@ -49,6 +51,12 @@ def start(job_id: str) -> dict[str, Any] | None:
 def record(outcome: dict[str, Any] | None, job_id: str) -> str | None:
     status = _run(lambda s: record_outcome(s, uuid.UUID(job_id), outcome))
     logger.info("scan_recorded", scan_job_id=job_id, status=status)
+    if status == "completed" and get_settings().intel_enabled:
+        # Refresh CVE data for the products this scan saw (intel worker has egress).
+        try:
+            celery_app.send_task(INTEL_ENRICH_TASK, args=[job_id], queue=INTEL_QUEUE, retry=False)
+        except Exception as exc:  # noqa: BLE001 - enrichment is best effort; beat retries
+            logger.warning("intel_enqueue_failed", scan_job_id=job_id, error=type(exc).__name__)
     return status
 
 
