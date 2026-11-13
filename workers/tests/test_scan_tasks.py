@@ -98,6 +98,11 @@ def test_ai_task_is_registered_with_a_bounded_time_limit() -> None:
     assert task.soft_time_limit < task.time_limit
 
 
+def test_report_task_is_registered() -> None:
+    celery_app.loader.import_default_modules()
+    assert "sentinelx.reports.generate" in celery_app.tasks
+
+
 def test_dispatcher_publishes_a_three_step_chain(monkeypatch: pytest.MonkeyPatch) -> None:
     app = Celery("test", broker="memory://")
     sent: list[dict[str, Any]] = []

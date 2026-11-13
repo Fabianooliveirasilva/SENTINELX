@@ -13,6 +13,7 @@ const tabs = [
   { to: "events", label: "Events", end: true },
   { to: "alerts", label: "Alerts", end: true },
   { to: "ai", label: "AI analyst", end: true },
+  { to: "reports", label: "Reports", end: true },
   { to: "software", label: "Software", end: true },
 ] as const;
 

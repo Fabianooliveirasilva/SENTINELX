@@ -25,7 +25,7 @@ Open <http://localhost:8080>. API docs (non-production only):
 |---------|-------|-----------|-----------|
 | `web` | `sentinelx/web` (nginx-unprivileged) | `127.0.0.1:8080` | non-root, read-only FS, `cap_drop: ALL`, `no-new-privileges`, limits |
 | `api` | `sentinelx/api` | `127.0.0.1:8000` | non-root (uid 10001), read-only FS, `cap_drop: ALL`, `no-new-privileges`, limits |
-| `worker` | `sentinelx/api` (Celery command) | — | same as API; `backend` network only (no egress); consumes `celery` + `orchestrator` queues and runs the embedded beat schedule (stale-job expiry, scan schedules, notification delivery, intel and risk jobs) |
+| `worker` | `sentinelx/api` (Celery command) | — | same as API; `backend` network only (no egress); consumes `celery` + `orchestrator` queues and runs the embedded beat schedule (stale-job expiry, scan schedules, notification delivery, intel and risk jobs) and renders reports |
 | `scanner-zap` | `sentinelx/scanner` (Celery, `scans.zap` queue, concurrency 1) | — | same as `scanner`; also on `zap-net`; hosts the egress guard ZAP must use (port 8899) |
 | `intel` | `sentinelx/api` (Celery, `intel` queue) | — | same as API; `backend` + `intel-egress`; reaches only the NVD API and the CISA KEV feed |
 | `ai` | `sentinelx/api` (Celery, `ai` queue, concurrency 2) | — | same as API; `backend` + `ai-egress`; the only container holding `SENTINELX_ANTHROPIC_API_KEY`; analyses are deterministic when it is empty |

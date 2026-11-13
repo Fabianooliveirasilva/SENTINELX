@@ -315,3 +315,5 @@ never see a provider error.
 | `apps/api/app/models/` holds the base | Declarative base in `app/db/base.py`; domain models will live in `app/models/` | Separates persistence plumbing from domain models |
 | Root `tests/e2e/` | Playwright suite in `apps/web/tests/e2e/` | Shares the web toolchain, lockfile and TS config |
 | Top-level engine folders created up front | Created when their phase starts | Avoid empty placeholder packages |
+| Top-level `ai-engine/` package | `apps/api/app/ai/` | Shares models and sessions with the API; the provider runs only in the `ai` worker |
+| Reports rendered by a sandboxed HTML-to-PDF engine (Phase 10 proposal) | ReportLab drawing API, content escaped | No HTML/CSS engine means no resource fetching (SSRF, `file://`) to sandbox; one less attack surface |

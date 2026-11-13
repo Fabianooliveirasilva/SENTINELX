@@ -22,6 +22,7 @@ from app.models.monitoring import (
 )
 from app.models.platform import PlatformSetting
 from app.models.project import Project, ProjectMember
+from app.models.report import Report
 from app.models.scan import ScanEvidence, ScanJob, ScanResult
 
 __all__ = [
@@ -47,6 +48,7 @@ __all__ = [
     "ProjectMember",
     "ProjectRiskSnapshot",
     "RefreshToken",
+    "Report",
     "Role",
     "ScanEvidence",
     "ScanJob",
