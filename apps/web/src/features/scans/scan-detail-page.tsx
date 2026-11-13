@@ -1,20 +1,32 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router";
 import { z } from "zod";
 
+import { FormField } from "@/components/shared/form-field";
 import { ErrorAlert, InlineAlert } from "@/components/shared/inline-alert";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { AnalysisPanel } from "@/features/ai/analysis-panel";
 import { useCan } from "@/features/auth/use-auth";
 import { ProjectTabs } from "@/features/projects/project-tabs";
+import { apiRequest, pageSchema } from "@/lib/api-client";
 import { formatDateTime } from "@/lib/format";
 
-import { cancelScan, getScan, isActive, POLL_INTERVAL_MS, scansKeys, type ScanDetail } from "./api";
+import {
+  cancelScan,
+  getScan,
+  isActive,
+  POLL_INTERVAL_MS,
+  scanJobSchema,
+  scansKeys,
+  type ScanDetail,
+} from "./api";
 import { AttentionBadge, ScanStatusBadge } from "./scan-status";
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -196,6 +208,53 @@ function EvidenceList({ scan }: { scan: ScanDetail }) {
   );
 }
 
+function ScanAI({ projectId, scan }: { projectId: string; scan: ScanDetail }) {
+  const [compareWith, setCompareWith] = useState("");
+  const others = useQuery({
+    queryKey: ["scans", projectId, "comparable", scan.asset_id],
+    queryFn: () =>
+      apiRequest(`/projects/${projectId}/scans`, pageSchema(scanJobSchema), {
+        query: { asset_id: scan.asset_id, status: "completed", page_size: 25 },
+      }),
+    enabled: scan.status === "completed",
+  });
+  const candidates = (others.data?.items ?? []).filter((s) => s.id !== scan.id);
+  return (
+    <>
+      <AnalysisPanel projectId={projectId} kind="scan_summary" subjectId={scan.id} />
+      {scan.status === "completed" && candidates.length > 0 ? (
+        <div className="space-y-3">
+          <FormField label="Compare with another scan of this asset">
+            <Select
+              value={compareWith}
+              onChange={(e) => {
+                setCompareWith(e.target.value);
+              }}
+            >
+              <option value="">Select a scan…</option>
+              {candidates.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.scanner}/{s.profile} · {formatDateTime(s.created_at)}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+          {compareWith ? (
+            <AnalysisPanel
+              key={compareWith}
+              projectId={projectId}
+              kind="scan_comparison"
+              subjectId={scan.id}
+              compareWith={compareWith}
+              description="What is new, resolved and persisting between the two scans."
+            />
+          ) : null}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 export function ScanDetailPage() {
   const { projectId = "", scanId = "" } = useParams();
   const canExecute = useCan("scans:execute");
@@ -247,6 +306,9 @@ export function ScanDetailPage() {
           <ScopeDecisionCard scan={scan.data} />
           <Results scan={scan.data} />
           <EvidenceList scan={scan.data} />
+          {scan.data.status === "completed" || scan.data.status === "failed" ? (
+            <ScanAI projectId={projectId} scan={scan.data} />
+          ) : null}
         </>
       )}
     </div>

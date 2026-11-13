@@ -172,6 +172,25 @@ backoff; other statuses and refused destinations fail permanently.
 
 Event titles and details can contain scanner-derived text and must be rendered as text.
 
+### AI analyst (Phase 9)
+
+| Method & path | Permission | Notes |
+|---------------|------------|-------|
+| `GET /projects/{id}/ai/usage` | `findings:read` | Provider enabled, model, tokens and estimated cost today, daily budget |
+| `POST /projects/{id}/ai/analyses` | `ai:use` | `{kind, subject_id?, compare_with?, refresh?}` → 202 with the analysis; `kind` is `finding_analysis`, `scan_summary`, `scan_comparison` (needs `compare_with`, same asset, both completed), `executive_summary` or `technical_summary`. An identical recent request returns the existing analysis unless `refresh` is true |
+| `GET /projects/{id}/ai/analyses` | `findings:read` | Filters `subject_id`, `kind`; newest first |
+| `GET /projects/{id}/ai/analyses/{analysis_id}` | `findings:read` | Poll until `status` is `completed` or `failed` |
+| `POST /projects/{id}/ai/analyses/{analysis_id}/review` | `ai:use` | Records the reviewer; 409 if not completed or already reviewed |
+
+An analysis carries `provider` (`anthropic` or `deterministic`), `model`,
+`prompt_version`, `fallback_reason`, `warnings` (validation corrections), token
+counts and `cost_usd`. `output` follows one schema: `title`, `summary`,
+`sections[].claims[]` (`text`, `basis`, `references`), `recommended_actions[]`,
+`investigation_steps[]`, `limitations[]`, `confidence`. References name context
+items (`F` finding, `E` evidence, `I` intelligence, `R` risk, `S` scan, `D` delta,
+`P` posture, `A` asset). Output text may echo scanner-derived data and must be
+rendered as text.
+
 Observation data and evidence originate from scanned systems and are untrusted;
 they are returned as JSON/text and must be rendered as text.
 
@@ -182,5 +201,5 @@ Authentication: `Authorization: Bearer <access_token>`. `401` responses include
 ## Planned resources
 
 
-`/reports`, `/ai`, `/settings` —
+`/reports`, `/settings` —
 introduced phase by phase (see [ROADMAP.md](ROADMAP.md)).

@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Select, Textarea } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { AnalysisPanel } from "@/features/ai/analysis-panel";
 import { useCan } from "@/features/auth/use-auth";
 import { ProjectTabs } from "@/features/projects/project-tabs";
 import { formatDateTime } from "@/lib/format";
@@ -258,6 +259,7 @@ export function FindingDetailPage() {
               ))}
             </CardContent>
           </Card>
+          <AnalysisPanel projectId={projectId} kind="finding_analysis" subjectId={findingId} />
           <Card>
             <CardHeader>
               <CardTitle>History</CardTitle>

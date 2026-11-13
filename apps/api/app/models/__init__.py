@@ -1,5 +1,6 @@
 """ORM models. Importing this package registers every table on ``Base.metadata``."""
 
+from app.models.ai import AIAnalysis
 from app.models.asset import Asset, AssetAuthorization
 from app.models.audit import AuditLog
 from app.models.finding import (
@@ -24,6 +25,7 @@ from app.models.project import Project, ProjectMember
 from app.models.scan import ScanEvidence, ScanJob, ScanResult
 
 __all__ = [
+    "AIAnalysis",
     "AlertRule",
     "Asset",
     "AssetAuthorization",

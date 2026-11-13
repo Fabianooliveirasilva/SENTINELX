@@ -24,6 +24,7 @@ from app.core.security.tokens import AccessTokenService
 from app.db.session import create_engine, create_session_factory
 from app.middleware.request_context import REQUEST_ID_HEADER, RequestContextMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
+from app.services.ai import CeleryAIDispatcher
 from app.services.email import build_email_sender
 from app.services.health import DatabaseHealthCheck, HealthService, RedisHealthCheck
 from app.services.scan_dispatch import (
@@ -99,6 +100,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     producer = create_producer(settings)
     app.state.scan_dispatcher = CeleryScanDispatcher(producer)
     app.state.intel_dispatcher = CeleryIntelDispatcher(producer)
+    app.state.ai_dispatcher = CeleryAIDispatcher(producer)
 
     register_exception_handlers(app)
 

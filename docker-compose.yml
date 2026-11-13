@@ -11,6 +11,8 @@
 #   scan-egress (bridge, outbound)                -> scanner, scanner-zap (the only containers
 #               that talk to scan targets; no database credentials or secret key)
 #   intel-egress (bridge, outbound)               -> intel only (NVD API and CISA KEV feed)
+#   ai-egress (bridge, outbound)                  -> ai only (Anthropic API; the only
+#               container holding the provider API key)
 #   notify-egress (bridge, outbound)              -> notifier only (SMTP relay, alert webhooks;
 #               webhook destinations are re-resolved and policy-checked per delivery)
 #   zap-net     (internal: no outbound)           -> zap, scanner-zap. ZAP's ONLY route out is
@@ -62,6 +64,9 @@ x-app: &app
     SENTINELX_ALLOW_SELF_REGISTRATION: ${SENTINELX_ALLOW_SELF_REGISTRATION:-false}
     SENTINELX_SCOPE_LAB_NETWORKS: ${SENTINELX_SCOPE_LAB_NETWORKS:-}
     SENTINELX_SCOPE_LAB_DOMAINS: ${SENTINELX_SCOPE_LAB_DOMAINS:-}
+    SENTINELX_AI_PROVIDER: ${SENTINELX_AI_PROVIDER:-disabled}
+    SENTINELX_AI_MODEL: ${SENTINELX_AI_MODEL:-claude-opus-5-5}
+    SENTINELX_AI_DAILY_TOKEN_BUDGET_PER_PROJECT: ${SENTINELX_AI_DAILY_TOKEN_BUDGET_PER_PROJECT:-300000}
 
 services:
   postgres:
@@ -233,6 +238,37 @@ services:
       resources:
         limits: { cpus: "0.5", memory: 384M }
 
+  # Runs AI analyses. The only container with the provider API key and egress to it.
+  ai:
+    <<: *app
+    command:
+      - celery
+      - -A
+      - sentinelx_workers.celery_app:celery_app
+      - worker
+      - --queues=ai
+      - --concurrency=2
+      - --loglevel=INFO
+      - --without-gossip
+      - --without-mingle
+    environment:
+      <<: *app-env
+      SENTINELX_ANTHROPIC_API_KEY: ${SENTINELX_ANTHROPIC_API_KEY:-}
+      SENTINELX_AI_EFFORT: ${SENTINELX_AI_EFFORT:-medium}
+    networks: [backend, ai-egress]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A sentinelx_workers.celery_app:celery_app inspect ping -d celery@$$HOSTNAME --timeout 5 | grep -q pong"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 384M }
+
   # Delivers alert notifications (e-mail, signed webhooks) from the database outbox.
   notifier:
     <<: *app
@@ -378,6 +414,8 @@ networks:
   intel-egress:
     driver: bridge
   notify-egress:
+    driver: bridge
+  ai-egress:
     driver: bridge
   frontend:
     ipam:

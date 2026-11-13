@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-11-13 — Phase 9: AI security analyst
+
+### Added
+- AI analyses (`ai_analyses`): finding analysis, scan summary, scan comparison,
+  executive and technical summaries; asynchronous jobs with provenance (provider,
+  model, prompt version, context summary, tokens, cost, duration).
+- Provider abstraction with an Anthropic implementation (official SDK,
+  `claude-opus-5-5`, structured outputs, configurable effort, server-side refusal
+  fallback, cached system prompt); deterministic analyses with the same schema
+  whenever the provider is disabled, unconfigured, over budget or failing.
+- Versioned prompts; every claim labelled as confirmed evidence, scanner
+  hypothesis, external intelligence or AI recommendation, with references.
+- `ai` worker on its own `ai` queue and `ai-egress` network (the only container
+  with the API key); per-project daily token budget, result reuse, usage endpoint.
+- Human review of analyses (recorded and audited).
+- API under `/projects/{id}/ai/…`; UI: AI panels on finding and scan pages, project
+  AI analyst page. Migration `0009`.
+
+### Security
+- Pseudonymization of asset values, hostnames (including any host in a URL),
+  IP addresses and e-mail addresses before data leaves the platform; redaction of
+  credential-looking values; scanner text delimited and labelled untrusted.
+- Server-side validation of model output: unknown references removed, unsupported
+  claim bases downgraded, claims naming CVEs outside the assessment data dropped.
+- Log fields for AI usage renamed so the log redactor does not mask them.
+
 ## [0.8.0] — 2026-11-12 — Phase 8: Monitoring & events
 
 ### Added
