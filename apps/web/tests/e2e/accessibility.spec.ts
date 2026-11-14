@@ -4,6 +4,10 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { ADMIN_EMAIL, ADMIN_PASSWORD, signIn } from "./helpers";
 
+// Behind Nginx the page's CSP (script-src 'self') would block the injected axe script.
+// Only the audit bypasses it; CSP itself is covered by the ZAP baseline and the header tests.
+test.use({ bypassCSP: true });
+
 const require = createRequire(import.meta.url);
 const AXE_PATH = require.resolve("axe-core/axe.min.js");
 
