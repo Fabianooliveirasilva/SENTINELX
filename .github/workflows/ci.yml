@@ -3,7 +3,8 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    # Phase branches are validated on every push, before their pull request exists.
+    branches: [main, "feat/**"]
   workflow_dispatch:
 
 permissions:

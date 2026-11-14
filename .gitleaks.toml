@@ -1,0 +1,10 @@
+# Gitleaks configuration (picked up automatically from the repository root).
+# Default rules stay enabled; only the exact, documented false positives below are allowed.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Fake credential used to test that the AI context redactor removes api_key=... values"
+condition = "AND"
+paths = ['''apps/api/tests/unit/test_ai\.py''']
+regexes = ['''api_key=XYZ123''']

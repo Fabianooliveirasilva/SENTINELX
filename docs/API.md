@@ -92,12 +92,28 @@ Readiness probe; checks PostgreSQL and Redis concurrently with a timeout.
 | `POST /projects/{id}/assets/{asset_id}/authorizations/{auth_id}/revoke` | `assets:write` | Reason required |
 | `POST /projects/{id}/scope/check` | `assets:read` | `{target, technique}` → decision with reasons and per-address verdicts; rate limited |
 
+### Scans (Phase 4)
+
+| Method & path | Permission | Notes |
+|---------------|------------|-------|
+| `GET /scanners` | `scans:read` | Catalog: technique, supported asset types, profiles |
+| `GET /projects/{id}/scans` | `scans:read` | Filters: `status`, `asset_id`, `scanner` |
+| `POST /projects/{id}/scans` | `scans:execute` | `{asset_id, scanner, profile?}` → **202** with the job; 422 if not eligible, 409 while halted, 429 on quota, 503 if the queue is down |
+| `GET /projects/{id}/scans/{scan_id}` | `scans:read` | Job + execution-time scope decision, pinned addresses, observations, evidence, tool versions |
+| `POST /projects/{id}/scans/{scan_id}/cancel` | `scans:execute` | Pending, queued or running jobs only (409 otherwise) |
+| `GET /scans/controls` | `scans:read` | Emergency-stop state |
+| `POST /scans/emergency-stop` | `settings:manage` | `{reason}`; cancels every active job platform-wide |
+| `POST /scans/resume` | `settings:manage` | Lifts the emergency stop |
+
+Observation data and evidence originate from scanned systems and are untrusted;
+they are returned as JSON/text and must be rendered as text.
+
 Authentication: `Authorization: Bearer <access_token>`. `401` responses include
 `WWW-Authenticate: Bearer`; `429` responses include `Retry-After`. Details in
 [AUTHENTICATION.md](AUTHENTICATION.md).
 
 ## Planned resources
 
-`/scans`, `/findings`,
+`/findings`,
 `/intelligence`, `/events`, `/reports`, `/ai`, `/settings` —
 introduced phase by phase (see [ROADMAP.md](ROADMAP.md)).

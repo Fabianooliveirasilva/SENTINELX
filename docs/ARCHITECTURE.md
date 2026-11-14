@@ -28,8 +28,8 @@ flowchart LR
     api -->|enqueue jobs| redis
     worker[Workers<br/>Celery] --> redis
     worker --> pg
-    worker -.->|planned: isolated sandbox| scanners[Scanner sandboxes<br/>Nmap · ZAP · Nuclei]
-    scanners -.->|scope-restricted egress| targets[(Authorized targets)]
+    redis -->|scans queue| scanner[Scanner sandbox<br/>DNS · CT · TLS · HTTP · Nmap]
+    scanner -->|pinned IPs only, scan-egress network| targets[(Authorized targets)]
     worker -.->|planned| nvd[NVD API]
     worker -.->|planned, optional| llm[Anthropic API]
 ```
@@ -44,12 +44,12 @@ flowchart LR
 | `migrate` | Alembic | One-shot schema migration before API/worker start | `backend` |
 | `postgres` | PostgreSQL 17 | System of record | `backend` |
 | `redis` | Redis 7.4 | Celery broker/result backend, cache, rate-limit counters | `backend` |
-| scanner sandboxes _(planned)_ | Nmap, OWASP ZAP, Nuclei containers | Execute a single, pre-validated scan profile | dedicated egress network |
+| `scanner` | Celery 5 + scanner adapters (Nmap) | Re-check scope with fresh DNS, execute one server-defined profile against pinned IPs; no DB access or secrets | `backend` (broker only) + `scan-egress` |
 
 The `backend` network is `internal: true`: PostgreSQL, Redis and workers have no
-route to the internet. Outbound access is granted later only to the components
-that need it (NVD sync, scanner sandboxes), through a dedicated, policy-controlled
-egress network (see [SCANNING_POLICY.md](SCANNING_POLICY.md)).
+route to the internet. Outbound access is granted only to the components that
+need it — today the `scanner` sandbox, through the dedicated `scan-egress`
+network (see [SCANNING_POLICY.md](SCANNING_POLICY.md)); later NVD sync.
 
 ## 4. Repository layout
 
@@ -134,7 +134,27 @@ HTTP (api/v1)  →  services  →  repositories (Phase 2+)  →  SQLAlchemy mode
 Long-running work (scans, enrichment, report generation, AI analysis) is
 submitted as a job and executed by Celery workers. The API immediately returns a
 job identifier; clients poll job state (`pending → queued → running →
-completed | failed | cancelled`) _(job model planned for Phase 4)_.
+completed | failed | cancelled`), which lives in PostgreSQL.
+
+A scan is published by the API as a three-step Celery chain:
+
+```mermaid
+sequenceDiagram
+    participant API
+    participant O as Orchestrator worker (DB)
+    participant S as Scanner sandbox (no DB)
+    API->>API: preflight (eligibility, quotas, emergency stop) → job pending
+    API->>O: chain → job queued
+    O->>O: start: re-read job, snapshot scope → running
+    O->>S: execute(request)
+    S->>S: scope engine with fresh DNS → pin IPs → run profile
+    S->>O: outcome (decision, observations, evidence)
+    O->>O: record: persist results → completed / failed
+```
+
+Cancelled or halted jobs are skipped by `start`; late results for jobs that are no
+longer `running` are discarded by `record`; a periodic task fails jobs whose
+messages were lost.
 
 Worker defaults (implemented): JSON-only serialization (no pickle), soft/hard time
 limits, late acknowledgement with reject-on-worker-lost, prefetch multiplier of 1.
@@ -171,7 +191,7 @@ thread-pool exhaustion. SQLAlchemy 2 typing integrates with mypy strict.
 **Rationale:** mature retry/time-limit/acknowledgement semantics, well-understood
 operations. Redis is already required for caching and rate limiting.
 **Trade-off:** Redis is not a durable queue; job state is persisted in PostgreSQL
-(Phase 4) so a Redis loss never loses the record of a scan.
+(since Phase 4) so a Redis loss never loses the record of a scan.
 
 ### ADR-005 — Same-origin frontend, CORS off by default
 **Decision:** the SPA reaches the API through `/api` on its own origin (Vite proxy
@@ -179,14 +199,24 @@ in development, Nginx in containers).
 **Rationale:** allows `SameSite=strict` HttpOnly cookies for the refresh token in
 Phase 2, removes a whole class of CORS misconfiguration risk.
 
-### ADR-006 — Scanner execution in dedicated sandboxes _(planned, Phase 4)_
-**Decision:** workers never run Nmap/ZAP/Nuclei in-process. Each scan runs in a
-short-lived, non-root container with a read-only filesystem, dropped
-capabilities (only what the scan profile needs, e.g. `NET_RAW` for SYN scans if
-ever enabled), CPU/memory/time limits, no access to application secrets or the
-`backend` network, and egress limited to the resolved, authorized target IPs.
+### ADR-006 — Scanner execution in a dedicated sandbox _(implemented, Phase 4)_
+**Decision:** the orchestrator worker never runs scanners. A separate `scanner`
+service (own image, own Celery app, `scans` queue only) executes scans as a
+non-root user with no capabilities (Nmap uses TCP connect scans), a read-only
+filesystem, CPU/memory/PID limits and no database URL or signing secret. Its
+worker process is recycled after every task. It re-evaluates scope itself and
+receives only pinned IPs.
 **Rationale:** scanner binaries parse hostile input; compromise of a scanner must
-not reach the database, Redis or credentials.
+not reach the database or credentials.
+**Revised from the original proposal (one container per scan):** launching
+containers per job requires giving the orchestrator the Docker socket, which is
+root-equivalent on the host — a worse risk than the one it removes. The
+long-lived sandbox with per-task process recycling keeps that privilege out of
+the platform. **Remaining gaps:** the sandbox reaches Redis over `backend` (it
+needs the broker; a per-service Redis ACL is recommended) and egress to private
+ranges is blocked in-process by the scope engine, not yet by a network firewall
+(see [DEPLOYMENT.md](DEPLOYMENT.md)). Kubernetes Jobs or gVisor are the natural
+next step for per-scan isolation.
 
 ### ADR-007 — AI is optional, advisory and isolated _(planned, Phase 9)_
 **Decision:** AI features sit behind a provider interface; the platform is fully

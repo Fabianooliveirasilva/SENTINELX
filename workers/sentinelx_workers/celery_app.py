@@ -20,6 +20,7 @@ from celery.signals import setup_logging
 
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
+from app.services.scan_dispatch import ORCHESTRATOR_QUEUE
 
 TASK_SOFT_TIME_LIMIT_SECONDS = 300
 TASK_HARD_TIME_LIMIT_SECONDS = 360
@@ -30,7 +31,7 @@ def create_celery_app(settings: Settings) -> Celery:
         "sentinelx",
         broker=settings.effective_celery_broker_url,
         backend=settings.effective_celery_result_backend,
-        include=["sentinelx_workers.tasks.system"],
+        include=["sentinelx_workers.tasks.system", "sentinelx_workers.tasks.scans"],
     )
     app.conf.update(
         task_serializer="json",
@@ -48,6 +49,13 @@ def create_celery_app(settings: Settings) -> Celery:
         worker_hijack_root_logger=False,
         result_expires=60 * 60 * 24,
         broker_connection_retry_on_startup=True,
+        beat_schedule={
+            "expire-stale-scan-jobs": {
+                "task": "sentinelx.scans.expire_stale",
+                "schedule": 300.0,
+                "options": {"queue": ORCHESTRATOR_QUEUE},
+            }
+        },
     )
     return app
 

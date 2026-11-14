@@ -96,6 +96,16 @@ class RateLimitedError(AppError):
         )
 
 
+class QuotaExceededError(AppError):
+    status_code = HTTPStatus.TOO_MANY_REQUESTS
+    code = "quota_exceeded"
+
+
+class ServiceUnavailableError(AppError):
+    status_code = HTTPStatus.SERVICE_UNAVAILABLE
+    code = "service_unavailable"
+
+
 def _request_id(request: Request) -> str | None:
     value = getattr(request.state, "request_id", None)
     return value if isinstance(value, str) else None

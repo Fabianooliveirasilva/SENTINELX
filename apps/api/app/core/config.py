@@ -95,6 +95,12 @@ class Settings(BaseSettings):
     dns_nameservers: Annotated[list[str], NoDecode] = Field(default_factory=list)
     max_authorization_days: int = Field(default=366, ge=1, le=3660)
 
+    # --- Scans ------------------------------------------------------------------
+    max_concurrent_scans_per_project: int = Field(default=3, ge=1, le=50)
+    max_daily_scans_per_project: int = Field(default=50, ge=1, le=10_000)
+    scan_timeout_seconds: int = Field(default=240, ge=10, le=3000)
+    scan_queue_timeout_seconds: int = Field(default=1800, ge=60, le=24 * 3600)
+
     # --- Rate limits (requests per window) --------------------------------------
     rate_limit_login_per_minute: int = Field(default=10, ge=1)
     rate_limit_refresh_per_minute: int = Field(default=60, ge=1)

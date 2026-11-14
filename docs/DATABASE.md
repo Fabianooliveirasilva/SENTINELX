@@ -67,9 +67,10 @@ erDiagram
 | `refresh_tokens` | user_id, token_hash (unique), family_id, expires_at, revoked_at, replaced_by_id, user_agent, ip | Rotation + reuse detection |
 | `assets` | project_id, type, value (normalized), criticality, exposure, status, tags (array), scan_eligible | Unique (project_id, type, value) |
 | `asset_authorizations` | asset_id, authorized_by (name/organization), reference (contract/ticket), scope_definition (jsonb), valid_from, valid_until, active_scanning_allowed, recorded_by | Required before any active scan |
-| `scan_jobs` | project_id, type, profile, status (pending/queued/running/completed/failed/cancelled), requested_by, started_at, finished_at, correlation_id, tool_versions (jsonb), error_code | Persistent job record |
-| `scan_job_assets` | scan_job_id, asset_id, resolved_targets (jsonb) | Exact IPs validated at execution time |
-| `scan_results` | scan_job_id, scanner, raw_output_ref, normalized (jsonb), checksum | Raw output stored as untrusted data |
+| `scan_jobs` ✅ | project_id, asset_id, scanner, profile, technique, target, status (check constraint: pending/queued/running/completed/failed/cancelled), requested_by_id, correlation_id, executor_task_id, created/queued/started/finished/cancel_requested_at, error_code, error_message, scope_decision (jsonb), pinned_addresses (array), tool_versions (jsonb), summary (jsonb) | Persistent job record (Phase 4). Pinned addresses are the exact IPs validated at execution time |
+| `scan_results` ✅ | scan_job_id, project_id, kind, key, data (jsonb), attention (array) | Normalized observations (open port, TLS endpoint, DNS record, technology…); untrusted data |
+| `scan_evidence` ✅ | scan_job_id, label, media_type, content (text, ≤ 64 KiB) | Bounded raw tool output (Nmap XML summary, certificates, response headers) |
+| `platform_settings` ✅ | key (PK), value (jsonb), updated_at, updated_by_id | Operational switches, e.g. `scans.halted` (emergency stop) |
 | `findings` | project_id, asset_id, fingerprint (unique per project), title, description, source, severity, confidence, status, cvss_vector, cvss_score, first_seen_at, last_seen_at, remediation | Deduplicated by fingerprint |
 | `finding_evidence` | finding_id, scan_result_id, kind, content, collected_at | Immutable |
 | `finding_status_history` | finding_id, from_status, to_status, changed_by, reason | Lifecycle audit |
@@ -89,7 +90,8 @@ erDiagram
 * `findings (project_id, fingerprint)` unique — deduplication across scans.
 * `security_events (project_id, occurred_at DESC)` — timeline queries.
 * `audit_logs (project_id, created_at DESC)` and `(actor_id, created_at DESC)`.
-* `scan_jobs (project_id, status, created_at DESC)` — active scans widget.
+* `scan_jobs (project_id, status)` and `(project_id, created_at)` ✅ — quotas and listings.
+* `scan_results (project_id, kind)` and `(scan_job_id)` ✅.
 * `refresh_tokens (token_hash)` unique, `(family_id)`.
 
 ## Tenant isolation

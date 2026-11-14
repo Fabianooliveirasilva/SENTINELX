@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-11-11 — Phase 4: Scan orchestration & reconnaissance
+
+### Added
+- Scan jobs persisted in PostgreSQL (`scan_jobs`, `scan_results`, `scan_evidence`)
+  with states `pending → queued → running → completed | failed | cancelled`;
+  `POST /projects/{id}/scans` returns `202` with the job.
+- Three-step Celery chain: orchestrator `start` (snapshot scope, mark running) →
+  sandboxed `execute` (fresh-DNS scope re-check, pinned IPs) → orchestrator `record`.
+- Scanner sandbox: separate Celery app, `scans` queue and `sentinelx/scanner` image
+  (non-root, no capabilities, read-only FS, CPU/memory/PID limits, no database
+  credentials or secret key, process recycled after every scan, `scan-egress` network).
+- Scanners: DNS posture (records, SPF, DMARC, CAA), passive certificate-transparency
+  subdomain discovery with provenance, TLS analyzer (trust, expiry, key strength,
+  legacy protocols), HTTP technology fingerprinting and security-header review,
+  Nmap TCP-connect safe profiles with `defusedxml` parsing.
+- Per-project concurrency and daily quotas, cancellation, platform-wide emergency
+  stop and resume (`platform_settings`), periodic expiry of lost jobs; all audited.
+- Frontend: Scans tab, scan configuration offering only eligible scanners and
+  profiles, execution details (scope decision, observations, evidence rendered as
+  text), emergency-stop controls.
+
+### Changed
+- `Scanner.target_for` is a class method; Nmap is limited to domain, subdomain and
+  IP assets (an application/service authorization does not cover a host-wide port
+  scan). A test asserts every scanner/asset combination yields an in-scope target.
+
 ## [0.3.0] — 2026-11-11 — Phase 3: Assets & scope enforcement
 
 ### Added

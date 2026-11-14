@@ -14,6 +14,10 @@ const AssetDetailPage = lazy(() =>
 const ScopeCheckPage = lazy(() =>
   import("@/features/assets/scope-check-page").then((m) => ({ default: m.ScopeCheckPage })),
 );
+const ScansPage = lazy(() => import("@/features/scans/scans-page").then((m) => ({ default: m.ScansPage })));
+const ScanDetailPage = lazy(() =>
+  import("@/features/scans/scan-detail-page").then((m) => ({ default: m.ScanDetailPage })),
+);
 const AccountPage = lazy(() => import("@/features/settings/account-page").then((m) => ({ default: m.AccountPage })));
 
 function Loading({ children }: { children: ReactNode }) {
@@ -60,5 +64,15 @@ export const AssetDetailRoute = () => (
 export const ScopeCheckRoute = () => (
   <Loading>
     <ScopeCheckPage />
+  </Loading>
+);
+export const ScansRoute = () => (
+  <Loading>
+    <ScansPage />
+  </Loading>
+);
+export const ScanDetailRoute = () => (
+  <Loading>
+    <ScanDetailPage />
   </Loading>
 );

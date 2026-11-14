@@ -1,9 +1,10 @@
 # SentinelX Scanning Policy
 
-> This policy is normative. **Implemented (Phase 3):** asset registration rules,
+> This policy is normative. **Implemented:** asset registration rules,
 > authorization records, the deny-by-default network policy and the scope engine
-> (`security-engine/sentinelx_security/scope`). Scanner execution controls arrive
-> in Phases 4–5; until then SentinelX performs **no** network scanning.
+> (Phase 3); scan orchestration, the scanner sandbox and the reconnaissance
+> scanners — DNS, certificate transparency, TLS, HTTP fingerprinting and Nmap
+> (Phase 4). ZAP and Nuclei arrive in Phase 5.
 
 ## 1. Principles
 
@@ -89,9 +90,18 @@ separately registered and authorized.
 
 ## 6. Tool-specific rules
 
-* **Nmap:** server-defined profiles only; TCP connect scans; bounded port sets;
-  `--max-rate`, `--host-timeout` and overall timeouts enforced; NSE limited to
-  an allowlist of `safe`/`default`/`version` scripts.
+* **Nmap:** server-defined profiles only (`quick`, `standard`, `web`); TCP
+  connect scans (`-sT`) as an unprivileged user; bounded port sets; `--max-rate`,
+  `--max-retries`, `--host-timeout` and an overall timeout enforced; no NSE script
+  selection (only `-sV --version-light` probes); forbidden options (`--script`,
+  `-A`, `-O`, `-sS`, `-sU`, decoys, spoofing, fragmentation) are rejected by a test.
+* **HTTP fingerprinting:** one `GET` per pinned address, sent to the IP with the
+  original `Host` header and SNI; redirects are recorded, never followed; bodies
+  read up to 256 KiB and matched only against fixed patterns.
+* **Passive sources:** certificate transparency (crt.sh) is queried for the
+  authorized domain only; discovered names are reported with provenance and are
+  never scanned until registered and authorized. Can be disabled with
+  `SENTINELX_PASSIVE_SOURCES_ENABLED=false`.
 * **OWASP ZAP:** baseline (passive) by default; context restricted to the
   authorized URLs; maximum duration; redirects outside scope not followed.
 * **Nuclei:** curated, reviewed, version-pinned template set; tags restricted
@@ -100,10 +110,37 @@ separately registered and authorized.
 
 ## 7. Execution controls
 
-Isolated, short-lived, non-root sandbox containers; CPU/memory/time limits; no
-access to application secrets or internal networks; egress limited to the
-validated target set; output size limits; operator **emergency stop** that
-cancels all running jobs of a project.
+Implemented in Phase 4:
+
+* **Two scope checks.** The API runs a static preflight (asset active, current
+  authorization permits the scanner's technique, scanner supports the asset
+  type). The authoritative check runs again *inside the sandbox* immediately
+  before execution, against a fresh snapshot of the project's authorizations and
+  fresh DNS. Scanners connect only to the addresses pinned by that decision; a
+  revoked authorization or a rebinding answer between request and execution
+  denies the job (`scope_denied`, audited as `scan.scope_denied`).
+* **Sandbox.** The `scanner` service consumes only the `scans` queue. It runs as
+  a non-root user with no Linux capabilities, a read-only root filesystem, CPU,
+  memory and PID limits, and **no database URL or signing secret**. The worker
+  process is recycled after every scan. It is the only container attached to the
+  `scan-egress` network.
+* **Server-side profiles only.** The request carries a scanner name and a profile
+  name validated against an allowlist; no flags, ports or scripts can be supplied.
+* **Time and size limits.** Per-scan timeout (`SENTINELX_SCAN_TIMEOUT_SECONDS`),
+  Celery soft/hard limits, per-tool timeouts with process-group kill, response and
+  evidence size caps, observation count caps.
+* **Quotas.** `SENTINELX_MAX_CONCURRENT_SCANS_PER_PROJECT` and
+  `SENTINELX_MAX_DAILY_SCANS_PER_PROJECT`, enforced under a per-project row lock.
+* **Cancellation and emergency stop.** Analysts can cancel their project's jobs;
+  administrators can trigger a **platform-wide emergency stop** that cancels every
+  pending, queued and running job (terminating the sandbox task) and blocks new
+  scans until scanning is explicitly resumed. Both are audited.
+* **Lost work.** Jobs whose messages were lost are failed by a periodic expiry
+  task, so a broker outage never leaves jobs "running" forever.
+
+Not yet enforced at the network layer: an egress firewall that only permits the
+pinned addresses (the scope engine enforces this in-process). See
+[DEPLOYMENT.md](DEPLOYMENT.md) for the recommended production control.
 
 ## 8. Reporting rules
 
