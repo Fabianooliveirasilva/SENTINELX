@@ -84,6 +84,9 @@ jobs:
           exit $status
 
       - name: Start stack
+        env:
+          # The E2E suite signs in many times in parallel; production keeps the default of 10.
+          SENTINELX_RATE_LIMIT_LOGIN_PER_MINUTE: "1000"
         run: |
           set -o pipefail
           docker compose config --quiet 2>&1 | tee "$RUNNER_TEMP/compose.log"
