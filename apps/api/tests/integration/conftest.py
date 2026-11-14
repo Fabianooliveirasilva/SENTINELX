@@ -34,6 +34,12 @@ from sentinelx_security.scope import NetworkPolicy, ScopeEngine, StaticResolver,
 
 ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
 TENANT_TABLES = (
+    "notifications",
+    "alert_rule_channels",
+    "alert_rules",
+    "notification_channels",
+    "scan_schedules",
+    "security_events",
     "finding_risk_changes",
     "project_risk_snapshots",
     "software_components",

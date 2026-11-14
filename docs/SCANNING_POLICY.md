@@ -159,6 +159,12 @@ Implemented in Phase 4:
   scans until scanning is explicitly resumed. Both are audited.
 * **Lost work.** Jobs whose messages were lost are failed by a periodic expiry
   task, so a broker outage never leaves jobs "running" forever.
+* **Scheduled scans (Phase 8).** A schedule is not a standing authorization. Each
+  run is submitted through the same request path as an interactive scan, as the
+  schedule's owner: an inactive owner, a lost project membership or permission, an
+  expired or revoked authorization, an exhausted quota or an emergency stop skips
+  the run, records the reason on the schedule and emits a `schedule.skipped` event.
+  Missed slots are not caught up after downtime.
 
 Not yet enforced at the network layer: an egress firewall that only permits the
 pinned addresses (the scope engine enforces this in-process). See

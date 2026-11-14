@@ -84,7 +84,23 @@ class Settings(BaseSettings):
     # local development too. Only disable for non-browser test clients.
     cookie_secure: bool = True
     frontend_base_url: str = "http://localhost:8080"
-    email_backend: Literal["console", "disabled"] = "console"
+    email_backend: Literal["console", "smtp", "disabled"] = "console"
+    email_from: str = "SentinelX <no-reply@sentinelx.example.com>"
+    smtp_host: str | None = None
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    # "starttls" upgrades a plain connection; "tls" is implicit TLS (port 465).
+    smtp_security: Literal["starttls", "tls"] = "starttls"
+    smtp_timeout_seconds: float = Field(default=15.0, gt=0, le=120)
+
+    # --- Monitoring & notifications ---------------------------------------------
+    webhook_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    notification_max_attempts: int = Field(default=6, ge=1, le=20)
+    notification_batch_size: int = Field(default=50, ge=1, le=500)
+    # Webhooks may target private addresses only inside these networks (e.g. an
+    # internal chat server). Loopback, link-local and metadata stay blocked.
+    webhook_allowed_networks: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
     # --- Scope enforcement ------------------------------------------------------
     # Private networks / internal domains of intentionally vulnerable labs that may
@@ -136,6 +152,7 @@ class Settings(BaseSettings):
         "scope_lab_networks",
         "scope_lab_domains",
         "dns_nameservers",
+        "webhook_allowed_networks",
         mode="before",
     )
     @classmethod
@@ -164,7 +181,7 @@ class Settings(BaseSettings):
             raise ValueError("wildcard '*' is not permitted in allowed_hosts")
         return hosts
 
-    @field_validator("scope_lab_networks")
+    @field_validator("scope_lab_networks", "webhook_allowed_networks")
     @classmethod
     def _validate_lab_networks(cls, values: list[str]) -> list[str]:
         return [str(network) for network in parse_lab_networks(values)]
@@ -238,6 +255,12 @@ class Settings(BaseSettings):
             raise ValueError("the console email backend is not permitted in production")
         if self.argon2_memory_cost_kib < 19456 or self.argon2_time_cost < 2:
             raise ValueError("Argon2id parameters are below the OWASP minimum for production")
+        return self
+
+    @model_validator(mode="after")
+    def _require_smtp_host(self) -> Settings:
+        if self.email_backend == "smtp" and not self.smtp_host:
+            raise ValueError("smtp_host is required when email_backend is 'smtp'")
         return self
 
     # ------------------------------------------------------------------ derived

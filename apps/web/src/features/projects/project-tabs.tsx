@@ -7,8 +7,11 @@ const tabs = [
   { to: "assets", label: "Assets", end: false },
   { to: "scope", label: "Scope check", end: true },
   { to: "scans", label: "Scans", end: false },
+  { to: "schedules", label: "Schedules", end: true },
   { to: "findings", label: "Findings", end: false },
   { to: "risk", label: "Risk", end: true },
+  { to: "events", label: "Events", end: true },
+  { to: "alerts", label: "Alerts", end: true },
   { to: "software", label: "Software", end: true },
 ] as const;
 

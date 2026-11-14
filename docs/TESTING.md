@@ -68,7 +68,25 @@ test (RBAC seed rows are preserved). Redis-dependent behavior in API tests uses
 > Integration tests **truncate** the database they point at. Never run them
 > against a database holding data you want to keep.
 
-## Latest results (Phase 7, local run 2026-11-12)
+## Latest results (Phase 8, local run 2026-11-12)
+
+| Suite | Result |
+|-------|--------|
+| Backend full suite (unit + integration + engine + workers, PostgreSQL 16 local) | 520 passed, 1 skipped (real Nmap binary absent locally); real-Redis tests pass against a `fakeredis` TCP server; coverage 94% |
+| Monitoring (timeline, rules, quiet periods, webhook signing/SSRF refusal, retries, SMTP, schedules) | 16 integration + 15 unit tests |
+| Frontend (Vitest) | 63 passed |
+| E2E (Playwright, Chromium, real API + PostgreSQL + workers) | 9 passed |
+| Live monitoring smoke (beat → schedule → HTTP scan in the sandbox → findings → events → alert → e-mail + signed webhook) | 6 findings, 1 alert matched the severity floor, both deliveries sent, signature verified |
+| Migration `0008` upgrade → `alembic check` → downgrade → upgrade | clean |
+| Ruff / mypy strict / ESLint strict / tsc / Bandit / pip-audit / pnpm audit | clean |
+| `notifier` container, compose, image scans | CI only (no Docker on the development host) |
+
+Webhook tests drive the real delivery code with an `httpx.MockTransport` and a
+static resolver: they assert the request goes to the pinned address with the
+original `Host`/SNI, that the HMAC signature verifies, and that private, loopback,
+metadata and mixed (rebinding) answers are refused before any connection.
+
+## Phase 7 results (local run 2026-11-12)
 
 | Suite | Result |
 |-------|--------|

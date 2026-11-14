@@ -17,10 +17,12 @@ from app.services.auth import AuthService
 from app.services.email import EmailSender
 from app.services.findings import FindingService
 from app.services.intel import IntelService
+from app.services.monitoring import MonitoringService
 from app.services.projects import ProjectService
 from app.services.rate_limit import RateLimiter
 from app.services.scan_dispatch import IntelDispatcher, ScanDispatcher
 from app.services.scans import ScanService
+from app.services.schedules import ScheduleService
 from app.services.users import UserService
 from sentinelx_security.scope import ScopeEngine
 
@@ -152,3 +154,15 @@ def get_intel_dispatcher(request: Request) -> IntelDispatcher:
 
 IntelServiceDep = Annotated[IntelService, Depends(get_intel_service)]
 IntelDispatcherDep = Annotated[IntelDispatcher, Depends(get_intel_dispatcher)]
+
+
+def get_monitoring_service(session: SessionDep, settings: SettingsDep) -> MonitoringService:
+    return MonitoringService(session, settings)
+
+
+def get_schedule_service(session: SessionDep) -> ScheduleService:
+    return ScheduleService(session)
+
+
+MonitoringServiceDep = Annotated[MonitoringService, Depends(get_monitoring_service)]
+ScheduleServiceDep = Annotated[ScheduleService, Depends(get_schedule_service)]

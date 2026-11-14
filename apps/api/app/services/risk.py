@@ -34,6 +34,7 @@ from app.models import (
     ProjectRiskSnapshot,
 )
 from app.services.audit import record_audit
+from app.services.events import EventType, emit
 from sentinelx_security.risk import (
     MODEL_VERSION,
     RiskInputs,
@@ -113,6 +114,7 @@ async def rescore(
             now,
         )
         factors = result.factors_dict()
+        previous_band = finding.risk_band
         if (
             finding.risk_score != result.score
             or finding.risk_band != result.band
@@ -136,6 +138,23 @@ async def rescore(
         finding.risk_factors = factors
         finding.risk_explanation = result.explanation
         finding.risk_calculated_at = now
+        if previous_band is not None and previous_band != result.band:
+            await emit(
+                session,
+                project_id=finding.project_id,
+                event_type=EventType.FINDING_RISK_CHANGED,
+                severity=result.band,
+                title=f"{finding.title}: risk {previous_band} → {result.band}",
+                asset_id=finding.asset_id,
+                finding_id=finding.id,
+                details={
+                    "from": previous_band,
+                    "to": result.band,
+                    "score": result.score,
+                    "trigger": trigger,
+                },
+                dedup_key=f"finding.risk_band_changed:{finding.id}:{result.band}",
+            )
     await session.flush()
     return changed
 

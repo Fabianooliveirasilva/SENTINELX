@@ -62,4 +62,6 @@ export type Permission =
   | "scans:execute"
   | "findings:read"
   | "findings:write"
-  | "intelligence:read";
+  | "intelligence:read"
+  | "events:read"
+  | "alerts:manage";

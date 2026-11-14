@@ -23,10 +23,24 @@ from sqlalchemy import and_, delete, func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import NotFoundError
-from app.models import Cve, CveMatch, IntelSource, ProductSync, ScanJob, SoftwareComponent
+from app.models import (
+    Cve,
+    CveMatch,
+    Finding,
+    IntelSource,
+    ProductSync,
+    ScanJob,
+    SoftwareComponent,
+)
 from app.repositories.sql import LIKE_ESCAPE, contains_pattern
 from app.schemas.pagination import PageParams
-from app.services.findings import IngestResult, IngestScope, ingest_candidates
+from app.services.events import EventType, emit
+from app.services.findings import (
+    ACTIVE_FINDING_STATUSES,
+    IngestResult,
+    IngestScope,
+    ingest_candidates,
+)
 from sentinelx_security.intel.correlate import SoftwareComponent as Component
 from sentinelx_security.intel.correlate import correlate, extract_components
 from sentinelx_security.intel.cpe import CpeRange
@@ -200,6 +214,42 @@ async def upsert_cves(session: AsyncSession, records: Iterable[CveRecord]) -> in
     return count
 
 
+async def _kev_events(session: AsyncSession, cve_ids: list[str], catalog: KevCatalog) -> None:
+    """One event per active finding whose CVE has just entered the KEV catalog."""
+    if not cve_ids:
+        return
+    findings = (
+        (
+            await session.execute(
+                select(Finding).where(
+                    Finding.cve_id.in_(cve_ids), Finding.status.in_(ACTIVE_FINDING_STATUSES)
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for finding in findings:
+        entry = catalog.entries[finding.cve_id or ""]
+        ransomware = entry.ransomware.strip().lower() == "known"
+        await emit(
+            session,
+            project_id=finding.project_id,
+            event_type=EventType.FINDING_KEV_LISTED,
+            severity="critical" if ransomware else "high",
+            title=f"{finding.cve_id} is known to be exploited (CISA KEV): {finding.title}",
+            asset_id=finding.asset_id,
+            finding_id=finding.id,
+            details={
+                "cve_id": finding.cve_id,
+                "kev_added_on": entry.date_added.isoformat() if entry.date_added else None,
+                "kev_due_on": entry.due_date.isoformat() if entry.due_date else None,
+                "ransomware_campaign_use": entry.ransomware or None,
+                "catalog_version": catalog.version,
+            },
+        )
+
+
 async def apply_kev(session: AsyncSession, catalog: KevCatalog) -> int:
     """Flag stored CVEs present in the KEV catalog. Returns how many are flagged."""
     if not catalog.entries:
@@ -209,11 +259,15 @@ async def apply_kev(session: AsyncSession, catalog: KevCatalog) -> int:
         .scalars()
         .all()
     )
+    newly_listed: list[str] = []
     for cve in rows:
         entry = catalog.entries[cve.id]
+        if cve.kev_added_on is None and entry.date_added is not None:
+            newly_listed.append(cve.id)
         cve.kev_added_on = entry.date_added or cve.kev_added_on
         cve.kev_due_on = entry.due_date
         cve.kev_ransomware = entry.ransomware or None
+    await _kev_events(session, newly_listed, catalog)
     await set_source(
         session, "kev", status="ok", version=catalog.version, records=len(catalog.entries)
     )

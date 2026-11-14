@@ -77,6 +77,19 @@ def test_intel_tasks_run_on_their_own_queue() -> None:
     assert {"sentinelx.intel.sync_epss", "sentinelx.risk.daily"} <= set(celery_app.tasks)
 
 
+def test_monitoring_tasks_are_registered_and_routed() -> None:
+    celery_app.loader.import_default_modules()
+    assert {
+        "sentinelx.monitoring.deliver",
+        "sentinelx.monitoring.run_schedules",
+    } <= set(celery_app.tasks)
+    schedule = celery_app.conf.beat_schedule
+    # Delivery needs outbound network: only the notifier worker consumes this queue.
+    assert schedule["deliver-notifications"]["options"]["queue"] == "notifications"
+    # Scheduling only touches the database and the broker.
+    assert schedule["run-scan-schedules"]["options"]["queue"] == "orchestrator"
+
+
 def test_dispatcher_publishes_a_three_step_chain(monkeypatch: pytest.MonkeyPatch) -> None:
     app = Celery("test", broker="memory://")
     sent: list[dict[str, Any]] = []

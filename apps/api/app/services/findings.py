@@ -38,6 +38,7 @@ from app.models.finding import FINDING_STATUSES, SEVERITIES
 from app.repositories.sql import LIKE_ESCAPE, contains_pattern
 from app.schemas.pagination import PageParams
 from app.services.audit import record_audit
+from app.services.events import CERTIFICATE_RULES, EventType, emit
 from app.services.projects import ProjectService
 from app.services.risk import rescore, snapshot
 from sentinelx_security.findings import RULESET_VERSION, FindingCandidate, derive_findings
@@ -99,6 +100,32 @@ def _history(
         reason=reason[:2000],
         changed_by_id=by_id,
         changed_by_email=by_email,
+    )
+
+
+async def _finding_event(
+    session: AsyncSession,
+    finding: Finding,
+    event_type: EventType,
+    scope: IngestScope,
+    *,
+    severity: str | None = None,
+) -> None:
+    await emit(
+        session,
+        project_id=finding.project_id,
+        event_type=event_type,
+        severity=severity or finding.severity,
+        title=finding.title,
+        asset_id=finding.asset_id,
+        finding_id=finding.id,
+        scan_job_id=scope.scan_job_id,
+        details={
+            "rule_id": finding.rule_id,
+            "location": finding.location,
+            "source": scope.source,
+            "profile": scope.profile,
+        },
     )
 
 
@@ -176,6 +203,9 @@ async def ingest_candidates(
             session.add(
                 _history(finding, "open", f"First observed by {_by(scope)}.", from_status=None)
             )
+            await _finding_event(session, finding, EventType.FINDING_CREATED, scope)
+            if finding.rule_id in CERTIFICATE_RULES:
+                await _finding_event(session, finding, EventType.CERTIFICATE_EXPIRING, scope)
             new += 1
         else:
             for name, value in fields.items():
@@ -196,6 +226,7 @@ async def ingest_candidates(
                 finding.status = "open"
                 finding.status_reason = "Regression: observed again after being resolved."
                 finding.resolved_at = None
+                await _finding_event(session, finding, EventType.FINDING_REOPENED, scope)
                 reopened += 1
             else:
                 updated += 1
@@ -238,6 +269,7 @@ async def ingest_candidates(
         finding.status = "resolved"
         finding.status_reason = "No longer observed."
         finding.resolved_at = now
+        await _finding_event(session, finding, EventType.FINDING_RESOLVED, scope, severity="info")
     await rescore(
         session,
         trigger="scan" if scope.scan_job_id else "correlation",
@@ -425,6 +457,18 @@ class FindingService:
             target_id=finding.id,
             project_id=project_id,
             details={"from": previous, "to": status, "reason": reason, "rule_id": finding.rule_id},
+        )
+        await emit(
+            self._session,
+            project_id=project_id,
+            event_type=EventType.FINDING_STATUS_CHANGED,
+            severity="info",
+            title=f"{finding.title}: {previous} → {status}",
+            asset_id=finding.asset_id,
+            finding_id=finding.id,
+            details={"from": previous, "to": status, "reason": reason, "rule_id": finding.rule_id},
+            actor_email=principal.email,
+            dedup_key=f"finding.status_changed:{finding.id}:{status}",
         )
         await self._session.commit()
         await self._session.refresh(finding)

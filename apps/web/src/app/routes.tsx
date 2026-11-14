@@ -11,6 +11,9 @@ import {
   IntelligenceRoute,
   ProjectDetailRoute,
   ProjectRiskRoute,
+  EventsRoute,
+  AlertsRoute,
+  SchedulesRoute,
   ProjectsRoute,
   RiskModelRoute,
   ScanDetailRoute,
@@ -146,6 +149,30 @@ export const routes: RouteObject[] = [
             element: (
               <RequirePermission permission="findings:read">
                 <ProjectRiskRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/events",
+            element: (
+              <RequirePermission permission="events:read">
+                <EventsRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/alerts",
+            element: (
+              <RequirePermission permission="events:read">
+                <AlertsRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/schedules",
+            element: (
+              <RequirePermission permission="scans:read">
+                <SchedulesRoute />
               </RequirePermission>
             ),
           },

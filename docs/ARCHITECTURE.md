@@ -150,8 +150,8 @@ sequenceDiagram
     participant API
     participant O as Orchestrator worker (DB)
     participant S as Scanner sandbox (no DB)
-    API->>API: preflight (eligibility, quotas, emergency stop) → job pending
-    API->>O: chain → job queued
+    API->>API: preflight (eligibility, quotas, emergency stop) → job queued
+    API->>O: publish chain
     O->>O: start: re-read job, snapshot scope → running
     O->>S: execute(request)
     S->>S: scope engine with fresh DNS → pin IPs → run profile
@@ -162,6 +162,22 @@ sequenceDiagram
 Cancelled or halted jobs are skipped by `start`; late results for jobs that are no
 longer `running` are discarded by `record`; a periodic task fails jobs whose
 messages were lost.
+
+### Events and notifications (Phase 8)
+
+Services call `emit()` inside the transaction that changes state, so an event
+exists exactly when the change was committed. `emit()` evaluates the project's
+alert rules and writes `notifications` rows (an outbox) in the same transaction.
+Delivery is decoupled: Celery beat enqueues `sentinelx.monitoring.deliver` every
+30 s on the `notifications` queue, consumed only by the `notifier` worker, the one
+container on the `notify-egress` network. Rows are leased before sending, so two
+notifiers never deliver the same notification twice; failures back off
+exponentially and become `failed` after the configured number of attempts.
+
+Scheduled scans are started by `sentinelx.monitoring.run_schedules` (every 60 s,
+orchestrator queue). Each due schedule is claimed (its next slot written and
+committed) before it runs, then submitted through `ScanService.request` as its
+owner — the same checks as an interactive request.
 
 Worker defaults (implemented): JSON-only serialization (no pickle), soft/hard time
 limits, late acknowledgement with reject-on-worker-lost, prefetch multiplier of 1.
@@ -265,6 +281,16 @@ ranking. A learned model would be harder to validate, drift silently and could n
 explain itself.
 **Trade-off:** the formula is coarse by design; environment-specific mitigations
 are captured through triage and asset context rather than hidden adjustments.
+
+### ADR-011 — Transactional outbox for alerts _(Phase 8)_
+
+**Decision:** events and their notifications are written in the transaction of
+the triggering change; a dedicated `notifier` worker with its own egress network
+delivers them. **Why:** no lost or phantom alerts (an event exists only if the
+change committed), retries survive restarts, and the only containers that talk to
+SMTP relays or webhook endpoints hold no scanner duties. Webhook destinations are
+treated like scan targets: resolved per delivery, policy-checked, pinned.
+**Trade-off:** up to ~30 s delivery latency; acceptable for security alerting.
 
 ### ADR-007 — AI is optional, advisory and isolated _(planned, Phase 9)_
 **Decision:** AI features sit behind a provider interface; the platform is fully
