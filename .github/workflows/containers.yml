@@ -130,9 +130,14 @@ jobs:
           r = httpx.get(url, headers={'X-ZAP-API-Key': key}, timeout=10)
           print('with key:', r.status_code, r.text[:200])
           r.raise_for_status()
-          r = httpx.get(url, timeout=10)
-          print('without key:', r.status_code, r.text[:200])
-          assert r.status_code in (400, 401, 403), r.status_code
+          # ZAP refuses a missing key either with an HTTP error or by closing the connection.
+          try:
+              r = httpx.get(url, timeout=10)
+          except httpx.TransportError as exc:
+              print('without key: connection refused by ZAP:', type(exc).__name__)
+          else:
+              print('without key:', r.status_code, r.text[:200])
+              assert r.status_code in (400, 401, 403), r.status_code
           "
 
       # The throwaway credential only ever lives in a runner temp file: it is never
