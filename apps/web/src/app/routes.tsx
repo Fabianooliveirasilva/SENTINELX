@@ -14,6 +14,8 @@ import {
   EventsRoute,
   AIAnalystRoute,
   DashboardRoute,
+  ReconRoute,
+  VulnerabilitiesRoute,
   ReportsRoute,
   AlertsRoute,
   SchedulesRoute,
@@ -52,6 +54,22 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, element: <DashboardRoute /> },
           { path: "system-status", element: <SystemStatusPage /> },
+          {
+            path: "vulnerabilities",
+            element: (
+              <RequirePermission permission="findings:read">
+                <VulnerabilitiesRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "reconnaissance",
+            element: (
+              <RequirePermission permission="assets:read">
+                <ReconRoute />
+              </RequirePermission>
+            ),
+          },
           {
             path: "projects",
             element: (

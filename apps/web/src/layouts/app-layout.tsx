@@ -1,4 +1,4 @@
-import { Activity, DatabaseZap, FolderKanban, Gauge, LayoutDashboard, LogOut, ScrollText, ShieldHalf, UserCog, Users, type LucideIcon } from "lucide-react";
+import { Activity, Bug, Radar, DatabaseZap, FolderKanban, Gauge, LayoutDashboard, LogOut, ScrollText, ShieldHalf, UserCog, Users, type LucideIcon } from "lucide-react";
 import { NavLink, Outlet } from "react-router";
 
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,8 @@ interface NavItem {
 const navigation: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/projects", label: "Projects", icon: FolderKanban, permission: "projects:read" },
+  { to: "/vulnerabilities", label: "Vulnerabilities", icon: Bug, permission: "findings:read" },
+  { to: "/reconnaissance", label: "Reconnaissance", icon: Radar, permission: "assets:read" },
   { to: "/intelligence", label: "Threat Intel", icon: DatabaseZap, permission: "intelligence:read" },
   { to: "/risk-model", label: "Risk Model", icon: Gauge, permission: "findings:read" },
   { to: "/users", label: "Users & Roles", icon: Users, permission: "users:read" },

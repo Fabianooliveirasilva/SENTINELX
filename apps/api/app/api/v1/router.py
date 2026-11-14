@@ -14,6 +14,7 @@ from app.api.v1.endpoints import (
     health,
     intelligence,
     monitoring,
+    portfolio,
     projects,
     reports,
     risk,
@@ -27,6 +28,7 @@ api_router.include_router(auth.router)
 api_router.include_router(users.router)
 api_router.include_router(projects.router)
 api_router.include_router(dashboard.router)
+api_router.include_router(portfolio.router)
 api_router.include_router(assets.router)
 api_router.include_router(scans.router)
 api_router.include_router(findings.router)

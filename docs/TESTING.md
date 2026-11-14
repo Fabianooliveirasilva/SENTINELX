@@ -72,13 +72,20 @@ test (RBAC seed rows are preserved). Redis-dependent behavior in API tests uses
 
 | Suite | Result |
 |-------|--------|
-| Backend full suite (unit + integration + engine + workers, PostgreSQL 16 local) | 556 passed, 1 skipped (real Nmap binary absent locally); coverage 94.22% |
-| Dashboard API (real aggregation, project filtering and isolation) | 2 integration tests |
-| Frontend (Vitest) | 74 passed |
+| Backend full suite (unit + integration + engine + workers, PostgreSQL 16 local) | 559 passed, 1 skipped (real Nmap binary absent locally); coverage 94.27% |
+| Dashboard and cross-project views (aggregation, isolation, 404s, 401s, filters, LIKE-wildcard escaping) | 5 integration tests |
+| Frontend (Vitest, incl. axe on both new pages) | 79 passed |
+| E2E (Playwright, Chromium, real API + PostgreSQL + orchestrator worker) | 16 passed (incl. axe light/dark on 10 pages, populated-dashboard axe, skip link, 375 px overflow) |
+| `pnpm build` | clean |
 | `make check` (Ruff, mypy strict, pytest, Vitest, ESLint strict, tsc, Bandit, pip-audit, pnpm audit) | exit 0 |
-| Migrations | none in this phase (no schema change); `alembic check` unaffected |
-| E2E (Playwright) and `pnpm build` | **Not run in this phase** |
-| Visual/contrast review in a browser, axe audit | **Not run** |
+| Migrations | none (no schema change); `alembic check`: no new upgrade operations |
+| Visual review | dashboard (desktop) and vulnerabilities (375 px) inspected; fixed clipped severity cards on phones |
+| Docker, Trivy, image builds | CI only (no Docker on the development host) |
+
+The real-browser axe audit found three defects that unit tests could not: a
+low-contrast "low" severity label, a horizontally scrollable table that was not
+keyboard accessible, and (through the E2E suite) a system-status spec that still
+assumed the old home page.
 
 ## Phase 10 results (local run 2026-11-13)
 

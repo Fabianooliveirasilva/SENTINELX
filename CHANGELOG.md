@@ -18,7 +18,17 @@ All notable changes to this project are documented here. The format follows
   users without projects. Every chart has a text alternative and a data table.
 - Skip-to-content link and a focusable `main` landmark in the app layout.
 
+- `GET /api/v1/vulnerabilities` and `GET /api/v1/reconnaissance`: read-only
+  cross-project views with project isolation; UI pages **Vulnerabilities** and
+  **Reconnaissance** (navigation entries shown only with `findings:read` /
+  `assets:read`).
+- Accessibility: real-browser axe audit (WCAG 2.x A/AA, incl. colour contrast, under both
+  colour-scheme preferences; the UI has a single dark theme) of every top-level page, keyboard skip link and 375 px overflow checks
+  in Playwright; axe checks in Vitest.
+
 ### Changed
+- Wide tables are now keyboard-scrollable (focusable labelled region); the "low"
+  severity text colour meets 4.5:1 contrast; severity summary cards stack on phones.
 - Dashboard replaces the placeholder home page; severity colours are shared
   between findings and charts.
 

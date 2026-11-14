@@ -27,6 +27,7 @@
   --severity-info: oklch(0.7 0.02 250);
   /* Text on dark surfaces needs 4.5:1; the critical mark step is 4.2:1. */
   --severity-critical-text: oklch(0.68 0.19 22);
+  --severity-low-text: oklch(0.72 0.15 255);
 
   --status-ok: oklch(0.76 0.15 160);
   --status-degraded: oklch(0.8 0.15 80);
@@ -49,6 +50,7 @@
 
   --color-severity-critical: var(--severity-critical);
   --color-severity-critical-text: var(--severity-critical-text);
+  --color-severity-low-text: var(--severity-low-text);
   --color-severity-high: var(--severity-high);
   --color-severity-medium: var(--severity-medium);
   --color-severity-low: var(--severity-low);

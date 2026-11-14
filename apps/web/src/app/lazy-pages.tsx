@@ -163,6 +163,20 @@ export const ReportsRoute = () => (
     <ReportsPage />
   </Loading>
 );
+const VulnerabilitiesPage = lazy(() =>
+  import("@/features/portfolio/vulnerabilities-page").then((m) => ({ default: m.VulnerabilitiesPage })),
+);
+const ReconPage = lazy(() => import("@/features/portfolio/recon-page").then((m) => ({ default: m.ReconPage })));
+export const VulnerabilitiesRoute = () => (
+  <Loading>
+    <VulnerabilitiesPage />
+  </Loading>
+);
+export const ReconRoute = () => (
+  <Loading>
+    <ReconPage />
+  </Loading>
+);
 export const DashboardRoute = () => (
   <Loading>
     <DashboardPage />

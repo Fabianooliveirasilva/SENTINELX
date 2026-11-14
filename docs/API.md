@@ -221,6 +221,13 @@ Authentication: `Authorization: Bearer <access_token>`. `401` responses include
 |---|---|---|
 | `GET /dashboard?project_id=` | `projects:read` | Read-only aggregate over the projects the caller can access (all, or one). `project_id` of an inaccessible project → 404. Returns totals, posture (score, band, worst project), 30-day posture trend, risk distribution, assets by exposure, 14-day scan activity, 8-week remediation flow, status breakdown, closed ratio, recent findings and a project ranking; `empty: true` when the caller has no projects. |
 
+## Cross-project views (Phase 11)
+
+| Endpoint | Permission | Notes |
+|---|---|---|
+| `GET /vulnerabilities` | `findings:read` | Findings across the projects the caller can access, highest risk first. Filters: `project_id` (inaccessible → 404), `severity`, `status`, `active` (default `true`: open + acknowledged; ignored when `status` is given), `search` (title; `%`/`_` are literal), `page`, `page_size`. Includes `by_severity` counts for the filtered set. |
+| `GET /reconnaissance` | `assets:read` | Active assets by type and exposure, assets registered in the last 7 days, scans of the last 30 days by scanner and status, the 10 most recent assets and scans. `empty: true` when the caller has no projects. |
+
 ## Planned resources
 
 

@@ -81,3 +81,75 @@ async def test_dashboard_only_counts_accessible_projects(stack: ApiStack) -> Non
     )
     assert response.status_code == 404
     assert (await _dashboard(stack, admin))["totals"]["active_findings"] == 1
+
+
+async def test_dashboard_requires_authentication(stack: ApiStack) -> None:
+    for path in ("/api/v1/dashboard", "/api/v1/vulnerabilities", "/api/v1/reconnaissance"):
+        assert (await stack.client.get(path)).status_code == 401
+
+
+async def test_vulnerabilities_across_projects(stack: ApiStack) -> None:
+    admin, analyst, project = await _setup(stack)
+    asset = await _asset(stack, analyst, project)
+    await _scan(stack, analyst, project, asset, "cleartext_http", "missing_csp")
+    outsider = await stack.user_headers("outsider@example.com", RoleName.SECURITY_ANALYST)
+    viewer_headers = await stack.user_headers("viewer@example.com", RoleName.VIEWER)
+    url = "/api/v1/vulnerabilities"
+
+    page = (await stack.client.get(url, headers=analyst)).json()
+    assert page["total"] == 2
+    assert {f["project_name"] for f in page["items"]} == {"Acme"}
+    assert {f["asset"] for f in page["items"]} == {"93.184.215.14"}
+    scores = [f["risk_score"] for f in page["items"]]
+    assert scores == sorted(scores, reverse=True)
+    assert sum(page["by_severity"].values()) == 2
+
+    one = (await stack.client.get(url, headers=analyst, params={"page_size": 1})).json()
+    assert len(one["items"]) == 1
+    assert one["total"] == 2
+    none = (await stack.client.get(url, headers=analyst, params={"search": "zzz-no-match"})).json()
+    assert none["total"] == 0
+    wildcard = (await stack.client.get(url, headers=analyst, params={"search": "%"})).json()
+    assert wildcard["total"] == 0  # LIKE wildcards are escaped
+    sev = page["items"][0]["severity"]
+    filtered = (await stack.client.get(url, headers=analyst, params={"severity": sev})).json()
+    assert filtered["total"] == page["by_severity"][sev]
+
+    # Isolation: foreign project → empty list / 404; admin sees everything.
+    assert (await stack.client.get(url, headers=outsider)).json()["total"] == 0
+    assert (await stack.client.get(url, headers=viewer_headers)).json()["total"] == 0
+    assert (
+        await stack.client.get(url, headers=outsider, params={"project_id": project})
+    ).status_code == 404
+    assert (await stack.client.get(url, headers=admin)).json()["total"] == 2
+    assert (
+        await stack.client.get(url, headers=analyst, params={"severity": "bogus"})
+    ).status_code == 422
+
+
+async def test_reconnaissance_overview(stack: ApiStack) -> None:
+    admin, analyst, project = await _setup(stack)
+    asset = await _asset(stack, analyst, project)
+    await _scan(stack, analyst, project, asset, "cleartext_http")
+    outsider = await stack.user_headers("outsider@example.com", RoleName.SECURITY_ANALYST)
+    url = "/api/v1/reconnaissance"
+
+    data = (await stack.client.get(url, headers=analyst)).json()
+    assert data["empty"] is False
+    assert data["assets_total"] == 1
+    assert data["assets_new_7d"] == 1
+    assert data["assets_by_type"]["ip_address"] == 1
+    assert data["recent_assets"][0]["value"] == "93.184.215.14"
+    assert data["recent_assets"][0]["project_name"] == "Acme"
+    assert sum(data["scans_30d_by_scanner"].values()) >= 1
+    assert data["recent_scans"][0]["project_name"] == "Acme"
+
+    hidden = (await stack.client.get(url, headers=outsider)).json()
+    assert hidden["empty"] is True
+    assert hidden["assets_total"] == 0
+    assert hidden["recent_assets"] == []
+    assert hidden["recent_scans"] == []
+    assert (
+        await stack.client.get(url, headers=outsider, params={"project_id": project})
+    ).status_code == 404
+    assert (await stack.client.get(url, headers=admin)).json()["assets_total"] == 1

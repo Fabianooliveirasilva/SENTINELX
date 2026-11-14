@@ -17,7 +17,7 @@ documentation and an explicit approval before the next phase starts.
 | 8 | Monitoring & events | Event ingestion, alerts, timeline, filters, notification abstraction (email/webhook ready) | **Delivered** |
 | 9 | AI security analyst | Anthropic provider abstraction, structured outputs, prompt versioning, prompt-injection defenses, budgets, deterministic fallback | **Delivered** |
 | 10 | Reporting | PDF + JSON reports with scope, methodology, evidence, tool versions, AI content labeled | **Delivered** |
-| 11 | Dashboard & UX completion | Dashboard on real data, remaining pages, accessibility pass | **Delivered** (dashboard + baseline a11y; see limitations) |
+| 11 | Dashboard & UX completion | Dashboard on real data, remaining pages, accessibility pass | **Delivered** |
 | 12 | Hardening & release | Metrics/observability, ZAP against SentinelX itself, container hardening review, release workflow, final docs | Planned |
 
 ## Mapping to the project success checklist
@@ -256,14 +256,17 @@ digitally signed; integrity relies on the stored SHA-256.
 | # | Criterion | Verification |
 |---|-----------|--------------|
 | 1 | Dashboard on real data: assets, active scans, critical findings, risk distribution, posture score and trend, recent findings, scan activity, asset exposure, remediation progress | `test_dashboard_aggregates_real_data`, Vitest `dashboard.test.tsx` |
-| 2 | Project isolation: only accessible projects are aggregated (all for administrators, memberships otherwise); foreign `project_id` → 404 | `test_dashboard_only_counts_accessible_projects` |
-| 3 | Charts accessible: text alternative and data table for each, no colour-only meaning, loading/empty/error states, untrusted titles rendered as text | `dashboard.test.tsx` |
-| 4 | Keyboard: skip-to-content link, focusable `main` | `AppLayout` (not covered by a dedicated test) |
+| 2 | Project isolation and authentication for the dashboard and the two cross-project views (accessible projects only — all for administrators; foreign `project_id` → 404; anonymous → 401) | `test_dashboard_only_counts_accessible_projects`, `test_dashboard_requires_authentication`, `test_vulnerabilities_across_projects`, `test_reconnaissance_overview` |
+| 3 | Reconnaissance overview and cross-project Vulnerability management pages, with loading / empty / error states and route guards | Vitest `portfolio.test.tsx` |
+| 4 | Charts accessible: text alternative and data table for each, no colour-only meaning; untrusted titles rendered as text | `dashboard.test.tsx`, axe |
+| 5 | Accessibility pass: axe (WCAG 2.x A/AA, incl. contrast) in a real browser on 10 pages in light and dark plus the populated dashboard; skip link and focus target; keyboard-scrollable tables; no horizontal overflow at 375 px | Playwright `accessibility.spec.ts`; Vitest axe |
+| 6 | Visual review of the new pages on desktop and phone width | screenshots reviewed (two layout defects fixed) |
 
-**Limitations.** The standalone cross-project pages (Reconnaissance overview,
-cross-project Vulnerability management) and a full accessibility audit (axe,
-contrast measurement, visual review at several viewports) were **not** done;
-they remain open. Playwright E2E and `pnpm build` were not run for this phase.
-The dashboard is computed on request (no cache). The posture trend reads the
-existing daily `project_risk_snapshots` and, across several projects, shows the
-highest project score per day; it shows nothing until two daily snapshots exist.
+**Limitations.** The dashboard is computed on request (no cache). The posture
+trend reads the existing daily `project_risk_snapshots` and, across several
+projects, shows the highest project score per day; it needs two daily snapshots.
+Axe covers what automated rules can detect; it does not replace a manual
+screen-reader pass, which was not done. Pages behind per-project routes
+(asset detail, scan detail, reports, AI, monitoring) were not part of the axe
+route list beyond what the E2E specs exercise. The dark theme is the only
+visual theme (the light-mode run uses the same palette).
