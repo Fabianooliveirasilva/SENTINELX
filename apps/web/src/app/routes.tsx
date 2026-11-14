@@ -5,13 +5,16 @@ import {
   AssetDetailRoute,
   AssetsRoute,
   AuditLogsRoute,
+  CveDetailRoute,
   FindingDetailRoute,
   FindingsRoute,
+  IntelligenceRoute,
   ProjectDetailRoute,
   ProjectsRoute,
   ScanDetailRoute,
   ScansRoute,
   ScopeCheckRoute,
+  SoftwareRoute,
   UsersRoute,
 } from "@/app/lazy-pages";
 import { NotFoundPage } from "@/app/not-found-page";
@@ -109,6 +112,30 @@ export const routes: RouteObject[] = [
             element: (
               <RequirePermission permission="findings:read">
                 <FindingDetailRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/software",
+            element: (
+              <RequirePermission permission="assets:read">
+                <SoftwareRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "intelligence",
+            element: (
+              <RequirePermission permission="intelligence:read">
+                <IntelligenceRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "intelligence/cves/:cveId",
+            element: (
+              <RequirePermission permission="intelligence:read">
+                <CveDetailRoute />
               </RequirePermission>
             ),
           },

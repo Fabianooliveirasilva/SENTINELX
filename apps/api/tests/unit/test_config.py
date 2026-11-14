@@ -89,3 +89,16 @@ def test_frontend_base_url_must_be_absolute() -> None:
     assert build_settings(frontend_base_url="https://app.example.com/").frontend_base_url == (
         "https://app.example.com"
     )
+
+
+def test_intel_settings_validation() -> None:
+    from app.core.config import Settings
+
+    base = {
+        "secret_key": "x" * 40,
+        "database_url": "postgresql+asyncpg://u:p@localhost/db",
+        "redis_url": "redis://localhost:6379/0",
+    }
+    assert Settings(_env_file=None, nvd_api_key="  ", **base).nvd_api_key is None  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="https"):
+        Settings(_env_file=None, nvd_base_url="http://nvd.example/", **base)  # type: ignore[arg-type]

@@ -34,6 +34,22 @@ class DispatchHandle:
     execute_task_id: str
 
 
+INTEL_QUEUE = "intel"
+INTEL_REFRESH_TASK = "sentinelx.intel.refresh_products"
+
+
+class IntelDispatcher(Protocol):
+    def refresh_products(self) -> None: ...
+
+
+class CeleryIntelDispatcher:
+    def __init__(self, app: Celery) -> None:
+        self._app = app
+
+    def refresh_products(self) -> None:
+        self._app.send_task(INTEL_REFRESH_TASK, queue=INTEL_QUEUE, retry=False)
+
+
 class ScanDispatcher(Protocol):
     def dispatch(self, job_id: str, scanner: str, timeout_seconds: int) -> DispatchHandle: ...
 

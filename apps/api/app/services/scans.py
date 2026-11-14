@@ -40,6 +40,7 @@ from app.schemas.pagination import PageParams
 from app.services.assets import compute_eligibility, to_scope_asset
 from app.services.audit import record_audit
 from app.services.findings import ingest_findings
+from app.services.intel import correlate_asset, record_components
 from app.services.projects import ProjectService
 from app.services.scan_dispatch import ScanDispatcher
 from sentinelx_security.scanners import CATALOG, ScannerName, ScanRequest
@@ -221,7 +222,16 @@ async def record_outcome(
         )
         await session.flush()
         ingested = await ingest_findings(session, job, observations)
-        job.summary = {**job.summary, "findings": ingested.to_dict()}
+        components = await record_components(session, job, observations)
+        # Correlate with the CVEs already stored; the intel worker refreshes stale
+        # products from NVD afterwards and re-correlates.
+        cves = await correlate_asset(session, job.project_id, job.asset_id, job.scanner, job.id)
+        job.summary = {
+            **job.summary,
+            "findings": ingested.to_dict(),
+            "software": len(components),
+            "cve_findings": cves.to_dict(),
+        }
     else:
         job.status = "failed"
         job.error_code = str(outcome.get("error_code") or "scanner_error")[:64]

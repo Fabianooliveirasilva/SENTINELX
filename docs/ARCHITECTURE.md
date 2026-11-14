@@ -33,7 +33,8 @@ flowchart LR
     zap[ZAP daemon<br/>zap-net only] -->|proxy| scannerzap
     scannerzap -->|pinned IPs only| targets
     scanner -->|pinned IPs only, scan-egress network| targets[(Authorized targets)]
-    worker -.->|planned| nvd[NVD API]
+    intel[Intel worker] -->|intel-egress| nvd[NVD API · CISA KEV]
+    intel --> pg
     worker -.->|planned, optional| llm[Anthropic API]
 ```
 
@@ -47,6 +48,7 @@ flowchart LR
 | `migrate` | Alembic | One-shot schema migration before API/worker start | `backend` |
 | `postgres` | PostgreSQL 17 | System of record | `backend` |
 | `redis` | Redis 7.4 | Celery broker/result backend, cache, rate-limit counters | `backend` |
+| `intel` | Celery 5 (API image), `intel` queue | NVD and CISA KEV sync, CVE correlation; the only DB-connected container with egress (feeds only) | `backend` + `intel-egress` |
 | `scanner-zap` | Same image, `scans.zap` queue | Drives the ZAP daemon one scan at a time; hosts the egress guard | `backend` + `scan-egress` + `zap-net` |
 | `zap` | OWASP ZAP 2.17 daemon | Spider, passive and (intrusive profile) active rules | `zap-net` only (internal) |
 | `scanner` | Celery 5 + scanner adapters (Nmap, Nuclei) | Re-check scope with fresh DNS, execute one server-defined profile against pinned IPs; no DB access or secrets | `backend` (broker only) + `scan-egress` |
@@ -238,6 +240,20 @@ refused destinations.
 `host:port` only, not on URL paths; path scoping is left to the ZAP context and
 Nuclei target. Nuclei shares the scanner's network, so for it the guard is
 enforced by configuration rather than by network isolation.
+
+### ADR-009 — Product-driven threat-intelligence sync _(Phase 6)_
+**Decision:** SentinelX does not mirror the NVD. When a scan observes a versioned
+product with a known CPE mapping, its `vendor:product` is registered and the intel
+worker fetches that product's CVEs (`virtualMatchString`), refreshing them after a
+TTL; the KEV catalog is applied daily. Correlation runs against the local store at
+scan time and again whenever a product refresh lands.
+**Rationale:** a full mirror is ~250k CVEs and, without an API key, days of
+rate-limited requests; most of it is irrelevant to the assets under test. Pulling
+only observed products keeps the first useful result minutes away and the
+database small.
+**Trade-off:** CVEs for products never observed are not searchable locally; an
+administrator can queue any `vendor:product` explicitly. CVE findings are always
+`tentative`: banners can be wrong and distributions backport fixes.
 
 ### ADR-007 — AI is optional, advisory and isolated _(planned, Phase 9)_
 **Decision:** AI features sit behind a provider interface; the platform is fully

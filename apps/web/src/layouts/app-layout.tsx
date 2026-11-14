@@ -1,4 +1,4 @@
-import { Activity, FolderKanban, LogOut, ScrollText, ShieldHalf, UserCog, Users, type LucideIcon } from "lucide-react";
+import { Activity, DatabaseZap, FolderKanban, LogOut, ScrollText, ShieldHalf, UserCog, Users, type LucideIcon } from "lucide-react";
 import { NavLink, Outlet } from "react-router";
 
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ interface NavItem {
 const navigation: NavItem[] = [
   { to: "/", label: "System Status", icon: Activity, end: true },
   { to: "/projects", label: "Projects", icon: FolderKanban, permission: "projects:read" },
+  { to: "/intelligence", label: "Threat Intel", icon: DatabaseZap, permission: "intelligence:read" },
   { to: "/users", label: "Users & Roles", icon: Users, permission: "users:read" },
   { to: "/audit-logs", label: "Audit Logs", icon: ScrollText, permission: "audit:read" },
   { to: "/settings/account", label: "Account", icon: UserCog },

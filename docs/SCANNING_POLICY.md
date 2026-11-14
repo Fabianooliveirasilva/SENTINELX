@@ -175,5 +175,11 @@ marks as false positives are dropped; Nuclei matches are `firm`, not
 certificate presented by the server). Analyst decisions (`false_positive`,
 `accepted_risk`) require a reason and are never overridden by later scans.
 
+CVE findings (Phase 6) come only from a versioned component whose CPE mapping
+and version fall inside an NVD *vulnerable* range; a product name without a
+version never produces a CVE finding. They are always `tentative`, carry the
+matched criterion and range as evidence, and resolve automatically when a later
+scan reports a version outside the range.
+
 Reports state methodology, scope, authorization reference, tool
 versions and limitations, and clearly label AI-generated commentary.

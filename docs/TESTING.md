@@ -68,7 +68,22 @@ test (RBAC seed rows are preserved). Redis-dependent behavior in API tests uses
 > Integration tests **truncate** the database they point at. Never run them
 > against a database holding data you want to keep.
 
-## Latest results (Phase 5, local run 2026-11-11)
+## Latest results (Phase 6, local run 2026-11-12)
+
+| Suite | Result |
+|-------|--------|
+| Security engine (scope, scanners, findings, egress guard, NVD/KEV parsing, CPE matching, correlation) | 257 passed, 1 skipped (real Nmap binary absent locally) |
+| Backend full suite (unit + integration + engine + workers, PostgreSQL 16 local) | 473 passed; the 2 real-Redis tests run in CI; coverage 95% |
+| Frontend (Vitest) | 55 passed |
+| E2E (Playwright, Chromium, real API + PostgreSQL) | 8 passed |
+| Live intelligence smoke (scan → intel worker → **live NVD API** → correlation) | 956 CVEs fetched for 2 products; 93 tentative CVE findings; spot checks matched NVD ranges |
+| Ruff / mypy strict / ESLint strict / tsc | clean |
+
+NVD and KEV client tests use real API responses saved as fixtures
+(`security-engine/tests/fixtures/nvd_page.json`, `kev_sample.json`) served through
+`httpx.MockTransport`; the suite never calls the live feeds.
+
+## Phase 5 results (local run 2026-11-11)
 
 | Suite | Result |
 |-------|--------|

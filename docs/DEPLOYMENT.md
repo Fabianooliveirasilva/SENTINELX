@@ -27,6 +27,7 @@ Open <http://localhost:8080>. API docs (non-production only):
 | `api` | `sentinelx/api` | `127.0.0.1:8000` | non-root (uid 10001), read-only FS, `cap_drop: ALL`, `no-new-privileges`, limits |
 | `worker` | `sentinelx/api` (Celery command) | — | same as API; `backend` network only (no egress); consumes `celery` + `orchestrator` queues and runs the embedded beat schedule (stale-job expiry) |
 | `scanner-zap` | `sentinelx/scanner` (Celery, `scans.zap` queue, concurrency 1) | — | same as `scanner`; also on `zap-net`; hosts the egress guard ZAP must use (port 8899) |
+| `intel` | `sentinelx/api` (Celery, `intel` queue) | — | same as API; `backend` + `intel-egress`; reaches only the NVD API and the CISA KEV feed |
 | `zap` | `zaproxy/zap-stable:2.17.0` (daemon) | — | `zap-net` only (internal, no egress); API key; read-only FS with tmpfs home; `cap_drop: ALL`; 2 GiB limit |
 | `scanner` | `sentinelx/scanner` (Celery, `scans` queue) | — | non-root (uid 10002), read-only FS, `cap_drop: ALL`, `no-new-privileges`, CPU/memory/PID limits; **no DB URL or secret key**; `backend` + `scan-egress` networks |
 | `migrate` | `sentinelx/api` (Alembic) | — | same as API; one-shot |
@@ -75,6 +76,10 @@ secret manager (Docker/Kubernetes secrets, Vault, cloud KMS) instead of a file.
   (API/worker) and `SENTINELX_PASSIVE_SOURCES_ENABLED` (scanner);
   `SENTINELX_ZAP_SCAN_TIMEOUT_SECONDS` (default 900). `ZAP_API_KEY` is generated
   by `make env` and shared only by `zap` and `scanner-zap`.
+* **Intel egress.** Restrict `intel-egress` to `services.nvd.nist.gov` and
+  `www.cisa.gov` (HTTPS) with an egress proxy or firewall. Set
+  `SENTINELX_NVD_API_KEY` (free) to raise the NVD limit from 5 to 50 requests per
+  30 seconds; `SENTINELX_INTEL_ENABLED=false` disables all feed traffic.
 * Redis receives its password on the command line, which is visible to processes
   inside its container; use a mounted ACL/config file in production.
 
