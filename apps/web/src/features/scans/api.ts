@@ -14,7 +14,7 @@ export const scannerSchema = z.object({
   technique: z.enum(TECHNIQUES),
   description: z.string(),
   default_profile: z.string(),
-  profiles: z.array(z.object({ name: z.string(), description: z.string() })),
+  profiles: z.array(z.object({ name: z.string(), description: z.string(), technique: z.enum(TECHNIQUES) })),
   supported_asset_types: z.array(z.enum(ASSET_TYPES)),
 });
 export type ScannerInfo = z.infer<typeof scannerSchema>;

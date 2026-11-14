@@ -68,7 +68,23 @@ test (RBAC seed rows are preserved). Redis-dependent behavior in API tests uses
 > Integration tests **truncate** the database they point at. Never run them
 > against a database holding data you want to keep.
 
-## Latest results (Phase 4, local run 2026-11-11)
+## Latest results (Phase 5, local run 2026-11-11)
+
+| Suite | Result |
+|-------|--------|
+| Security engine (scope, scanners, findings rules, egress guard, Nuclei/ZAP adapters) | 236 passed, 1 skipped (real Nmap binary absent locally) |
+| Backend full suite (unit + integration + engine + workers, PostgreSQL 16 local) | 444 passed; 2 real-Redis tests run in CI (they pass against a `fakeredis` TCP server); coverage 95% |
+| Frontend (Vitest) | 51 passed |
+| E2E (Playwright, Chromium, real API + PostgreSQL) | 8 passed |
+| Live pipeline smoke (API → orchestrator → scanner sandbox → record → findings) | HTTP scan of a LAN lab target created 6 findings; re-scan deduplicated all 6; triage applied |
+| Ruff / mypy strict / ESLint strict / tsc | clean |
+| Real ZAP and Nuclei runs, scanner image build, compose, Trivy | CI only (the development host does not run third-party scanner binaries) |
+
+The Nuclei test drives the real egress guard: while the fake tool "runs", it
+sends a request through the configured proxy to `169.254.169.254` and the test
+asserts the guard refused it and recorded the denial in the evidence.
+
+## Phase 4 results (local run 2026-11-11)
 
 | Suite | Result |
 |-------|--------|

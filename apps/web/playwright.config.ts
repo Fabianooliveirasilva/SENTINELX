@@ -11,7 +11,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
+  reporter: process.env.CI
+    ? [["list"], ["html", { open: "never" }], ...(process.env.PLAYWRIGHT_JSON_OUTPUT_NAME ? [["json"] as const] : [])]
+    : "list",
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:8080",
     trace: "retain-on-failure",

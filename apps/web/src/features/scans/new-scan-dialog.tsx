@@ -33,6 +33,7 @@ export function NewScanDialog({ projectId, disabled }: { projectId: string; disa
   const asset = assets.data?.items.find((a) => a.id === assetId);
   const available = (scanners.data ?? []).filter((s) => (asset ? eligible(asset, s) : false));
   const scanner = available.find((s) => s.name === scannerName);
+  const profiles = scanner && asset ? scanner.profiles.filter((p) => asset.eligibility[p.technique]) : [];
 
   const mutation = useMutation({
     mutationFn: () => requestScan(projectId, { asset_id: assetId, scanner: scannerName, profile }),
@@ -127,9 +128,10 @@ export function NewScanDialog({ projectId, disabled }: { projectId: string; disa
                 setProfile(e.target.value);
               }}
             >
-              {(scanner?.profiles ?? []).map((p) => (
+              {profiles.map((p) => (
                 <option key={p.name} value={p.name}>
                   {p.name}
+                  {p.technique === scanner?.technique ? "" : ` (${p.technique})`}
                 </option>
               ))}
             </Select>

@@ -82,4 +82,9 @@ test("register an asset, authorize it and verify scope decisions", async ({ page
   await expect(page.getByRole("button", { name: /new scan/i })).toBeDisabled();
   await page.getByRole("button", { name: "Resume scanning" }).click();
   await expect(page.getByRole("button", { name: /new scan/i })).toBeEnabled();
+
+  // Findings start empty for a project that has not been scanned.
+  await page.getByRole("navigation", { name: "Project sections" }).getByRole("link", { name: "Findings" }).click();
+  await expect(page.getByRole("list", { name: "Open findings by severity" })).toBeVisible();
+  await expect(page.getByText("No findings match these filters")).toBeVisible();
 });

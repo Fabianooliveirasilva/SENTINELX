@@ -11,7 +11,7 @@ documentation and an explicit approval before the next phase starts.
 | 2 | Identity, access & tenancy | Users, Argon2id, access + rotating refresh tokens, session revocation, password reset, RBAC (Admin / Security Analyst / Viewer), projects, audit log, rate limiting, CSRF, login UI | **Delivered** |
 | 3 | Assets & scope enforcement | Asset inventory (domain, subdomain, IP, web app, API endpoint, service), authorization records, scope engine (DNS rebinding, private ranges, IPv6, redirects, SSRF), asset history, inventory UI | **Delivered** |
 | 4 | Scan orchestration & reconnaissance | Job model & states, scanner interface (`validate_scope/execute/normalize_results/handle_errors/record_evidence`), sandbox runner, DNS analyzer, passive subdomain discovery, TLS analyzer, Nmap safe profiles, technology fingerprinting | **Delivered** |
-| 5 | Vulnerability assessment | OWASP ZAP baseline (active only with explicit authorization), Nuclei curated/pinned templates, HTTP security checks, findings normalization, evidence, lifecycle states | Planned |
+| 5 | Vulnerability assessment | OWASP ZAP baseline (active only with explicit authorization), Nuclei curated/pinned templates, HTTP security checks, findings normalization, evidence, lifecycle states | **Delivered** |
 | 6 | Threat intelligence | NVD sync with rate limits and caching, CVE/CWE/CPE, version-range matching with confidence, provenance | Planned |
 | 7 | Risk engine | Deterministic, versioned, explainable risk model; configurable weights | Planned |
 | 8 | Monitoring & events | Event ingestion, alerts, timeline, filters, notification abstraction (email/webhook ready) | Planned |
@@ -28,8 +28,8 @@ documentation and an explicit approval before the next phase starts.
 | Registration and validation of authorized assets | 3 ✅ |
 | DNS reconnaissance and TLS analysis | 4 ✅ |
 | Functional Nmap integration | 4 ✅ |
-| Functional OWASP ZAP integration | 5 |
-| Controlled Nuclei integration | 5 |
+| Functional OWASP ZAP integration | 5 ✅ |
+| Controlled Nuclei integration | 5 ✅ |
 | CVE lookup and correlation | 6 |
 | Functional risk engine | 7 |
 | Monitoring and event history | 8 |
@@ -111,14 +111,32 @@ Network-level egress filtering of the sandbox (allowing only the pinned
 addresses) is enforced in-process by the scope engine today; a host/egress-proxy
 firewall is listed under production hardening in [DEPLOYMENT.md](DEPLOYMENT.md).
 
-## Phase 5 proposal — Vulnerability assessment
+## Phase 5 — delivered
 
-* `findings` model (severity, confidence, status lifecycle, evidence links,
-  deduplication key) derived from observations, with analyst triage.
-* OWASP ZAP baseline (passive) in its own sandbox image; active rules only with
-  an `allow_intrusive` authorization; context restricted to authorized URLs;
-  redirects validated per hop with `evaluate_redirect`.
-* Nuclei with a curated, version-pinned template set (no `intrusive`, `dos`,
-  `fuzz`, `brute-force` or exploit tags), template IDs recorded as evidence.
-* HTTP security checks promoted from Phase 4 observations to findings.
-* Findings UI (list, filters, detail with evidence, status changes).
+| # | Criterion | Verification |
+|---|-----------|--------------|
+| 1 | Findings with stable fingerprints, severity, confidence, CWE, remediation, references; occurrences as evidence trail; status lifecycle with history and audit | `test_findings.py` (API), `security-engine/tests/test_findings.py` |
+| 2 | Deterministic, versioned rules map Phase 4 observations (TLS, HTTP headers, DNS/e-mail, exposed services) to findings; re-scans update, regressions reopen, absent issues auto-resolve per scanner + profile; analyst suppressions respected | `test_auto_resolution_and_regression`, `test_triage_and_suppression` |
+| 3 | Egress guard: only the authorized host:port, pinned IPs, no DNS, budgets, denied destinations recorded | `security-engine/tests/test_egress.py` |
+| 4 | Nuclei: pinned and checksum-verified binary/templates, allowlisted directories, http protocol only, excluded tags, no interactsh, behind the guard | `test_vuln_scanners.py` (guard probed while the tool runs) |
+| 5 | ZAP: isolated daemon reachable only through the guard; scoped context; bounded spider; passive rules; active scan only in the `full` profile, which requires an intrusive authorization | `test_vuln_scanners.py`, `test_intrusive_profile_requires_an_intrusive_authorization`, Containers workflow |
+| 6 | UI: Findings tab (severity summary, filters), finding detail (evidence, references, history), triage with mandatory reasons, findings delta on scan details | Vitest `findings.test.tsx`, Playwright |
+
+**Limitations.** Real ZAP and Nuclei executions are exercised only in the
+Containers workflow (the development host cannot run them); adapters are tested
+against recorded API responses and JSONL output. ZAP authenticated scanning and
+API-definition import (OpenAPI) are not implemented yet.
+
+## Phase 6 proposal — Threat intelligence
+
+* NVD CVE API 2.0 client with API-key support, rate limiting, incremental sync
+  (`lastModStartDate`), caching and provenance; runs in a worker with a dedicated
+  egress path.
+* `cves`, `cpe_matches`, `cwes` tables; CPE 2.3 parsing and version-range
+  matching (incl./excl. bounds) with a confidence score; never asserting a CVE
+  from a product name alone.
+* Correlation of fingerprinted technologies (HTTP, Nmap `-sV`, Nuclei tech
+  templates) to CVEs as `tentative` findings with the matching evidence.
+* CVSS v3.1/v4.0 vectors on findings; KEV flag where available.
+* Intelligence UI: CVE search, CVE detail with affected configurations, links
+  from findings.

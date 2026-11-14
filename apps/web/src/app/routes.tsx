@@ -5,6 +5,8 @@ import {
   AssetDetailRoute,
   AssetsRoute,
   AuditLogsRoute,
+  FindingDetailRoute,
+  FindingsRoute,
   ProjectDetailRoute,
   ProjectsRoute,
   ScanDetailRoute,
@@ -91,6 +93,22 @@ export const routes: RouteObject[] = [
             element: (
               <RequirePermission permission="scans:read">
                 <ScanDetailRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/findings",
+            element: (
+              <RequirePermission permission="findings:read">
+                <FindingsRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/findings/:findingId",
+            element: (
+              <RequirePermission permission="findings:read">
+                <FindingDetailRoute />
               </RequirePermission>
             ),
           },

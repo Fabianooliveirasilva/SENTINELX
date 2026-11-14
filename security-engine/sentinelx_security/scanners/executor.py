@@ -126,7 +126,9 @@ async def execute_scan(
         )
 
     assets = [asset_from_dict(a) for a in request.assets]
-    decision = await scanner.validate_scope(engine, request.target, assets, now or started)
+    decision = await scanner.validate_scope(
+        engine, request.target, assets, now or started, profile=request.profile
+    )
     decision_dict = decision_to_dict(decision)
     if not decision.allowed:
         reason = decision.reasons[0].message if decision.reasons else "Target is out of scope."

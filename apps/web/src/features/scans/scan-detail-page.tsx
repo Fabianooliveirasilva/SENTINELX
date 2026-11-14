@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { Link, useParams } from "react-router";
+import { z } from "zod";
 
 import { ErrorAlert, InlineAlert } from "@/components/shared/inline-alert";
 import { PageHeader } from "@/components/shared/page-header";
@@ -22,6 +23,19 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <dt className="text-xs text-muted-foreground uppercase">{label}</dt>
       <dd className="mt-0.5 text-sm break-words">{children}</dd>
     </div>
+  );
+}
+
+const findingsDeltaSchema = z.object({ new: z.number(), reopened: z.number(), resolved: z.number() });
+
+function FindingsDelta({ scan }: { scan: ScanDetail }) {
+  const parsed = findingsDeltaSchema.safeParse(scan.summary.findings);
+  if (!parsed.success) return <>—</>;
+  const { new: created, reopened, resolved } = parsed.data;
+  return (
+    <Link to={`/projects/${scan.project_id}/findings`} className="text-primary hover:underline">
+      {created} new · {reopened} reopened · {resolved} resolved
+    </Link>
   );
 }
 
@@ -51,6 +65,9 @@ function Overview({ scan }: { scan: ScanDetail }) {
                 .map(([k, v]) => `${k} ${v}`)
                 .join(" · ") || "—"}
             </span>
+          </Field>
+          <Field label="Findings">
+            <FindingsDelta scan={scan} />
           </Field>
           <Field label="Correlation ID">
             <span className="font-mono text-xs">{scan.correlation_id ?? "—"}</span>

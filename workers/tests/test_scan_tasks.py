@@ -17,6 +17,7 @@ from app.services.scan_dispatch import (
     RECORD_TASK,
     SCANNER_QUEUE,
     START_TASK,
+    ZAP_QUEUE,
     CeleryScanDispatcher,
 )
 from sentinelx_security.scanners import (
@@ -73,7 +74,7 @@ def test_dispatcher_publishes_a_three_step_chain(monkeypatch: pytest.MonkeyPatch
         return original(self, *args, **kwargs)
 
     monkeypatch.setattr(_chain, "apply_async", recording_apply_async)
-    handle = CeleryScanDispatcher(app).dispatch("job-1", timeout_seconds=100)
+    handle = CeleryScanDispatcher(app).dispatch("job-1", "nmap", timeout_seconds=100)
 
     assert [s["name"] for s in sent] == [START_TASK, EXECUTE_TASK, RECORD_TASK]
     assert [s["options"]["queue"] for s in sent] == [
@@ -84,6 +85,10 @@ def test_dispatcher_publishes_a_three_step_chain(monkeypatch: pytest.MonkeyPatch
     assert sent[0]["args"] == ("job-1",)
     assert sent[1]["options"]["time_limit"] == 160
     assert handle.execute_task_id
+
+    sent.clear()
+    CeleryScanDispatcher(app).dispatch("job-2", "zap", timeout_seconds=900)
+    assert sent[1]["options"]["queue"] == ZAP_QUEUE
 
 
 class EchoScanner(Scanner):

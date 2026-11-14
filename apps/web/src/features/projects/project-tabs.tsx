@@ -7,6 +7,7 @@ const tabs = [
   { to: "assets", label: "Assets", end: false },
   { to: "scope", label: "Scope check", end: true },
   { to: "scans", label: "Scans", end: false },
+  { to: "findings", label: "Findings", end: false },
 ] as const;
 
 export function ProjectTabs({ projectId }: { projectId: string }) {

@@ -28,7 +28,10 @@ flowchart LR
     api -->|enqueue jobs| redis
     worker[Workers<br/>Celery] --> redis
     worker --> pg
-    redis -->|scans queue| scanner[Scanner sandbox<br/>DNS · CT · TLS · HTTP · Nmap]
+    redis -->|scans queue| scanner[Scanner sandbox<br/>DNS · CT · TLS · HTTP · Nmap · Nuclei]
+    redis -->|scans.zap queue| scannerzap[ZAP worker<br/>egress guard]
+    zap[ZAP daemon<br/>zap-net only] -->|proxy| scannerzap
+    scannerzap -->|pinned IPs only| targets
     scanner -->|pinned IPs only, scan-egress network| targets[(Authorized targets)]
     worker -.->|planned| nvd[NVD API]
     worker -.->|planned, optional| llm[Anthropic API]
@@ -44,7 +47,9 @@ flowchart LR
 | `migrate` | Alembic | One-shot schema migration before API/worker start | `backend` |
 | `postgres` | PostgreSQL 17 | System of record | `backend` |
 | `redis` | Redis 7.4 | Celery broker/result backend, cache, rate-limit counters | `backend` |
-| `scanner` | Celery 5 + scanner adapters (Nmap) | Re-check scope with fresh DNS, execute one server-defined profile against pinned IPs; no DB access or secrets | `backend` (broker only) + `scan-egress` |
+| `scanner-zap` | Same image, `scans.zap` queue | Drives the ZAP daemon one scan at a time; hosts the egress guard | `backend` + `scan-egress` + `zap-net` |
+| `zap` | OWASP ZAP 2.17 daemon | Spider, passive and (intrusive profile) active rules | `zap-net` only (internal) |
+| `scanner` | Celery 5 + scanner adapters (Nmap, Nuclei) | Re-check scope with fresh DNS, execute one server-defined profile against pinned IPs; no DB access or secrets | `backend` (broker only) + `scan-egress` |
 
 The `backend` network is `internal: true`: PostgreSQL, Redis and workers have no
 route to the internet. Outbound access is granted only to the components that
@@ -217,6 +222,22 @@ needs the broker; a per-service Redis ACL is recommended) and egress to private
 ranges is blocked in-process by the scope engine, not yet by a network firewall
 (see [DEPLOYMENT.md](DEPLOYMENT.md)). Kubernetes Jobs or gVisor are the natural
 next step for per-scan isolation.
+
+### ADR-008 — Egress guard for tools that resolve names themselves _(Phase 5)_
+**Decision:** ZAP and Nuclei never connect to targets directly. Each scan starts an
+in-process forward proxy that only admits the authorized `host:port`, connects to
+the addresses pinned by the execution-time scope decision, and never resolves DNS.
+ZAP is additionally placed on an internal-only network so the proxy is its only
+route out.
+**Rationale:** both tools follow links and redirects and resolve names on their
+own; configuring their "scope" features alone would leave DNS rebinding and
+out-of-scope redirects to the tools' correctness. A proxy we own makes the
+scope decision the single point of enforcement and produces an auditable list of
+refused destinations.
+**Trade-off:** HTTPS is tunnelled (no interception), so the guard decides on
+`host:port` only, not on URL paths; path scoping is left to the ZAP context and
+Nuclei target. Nuclei shares the scanner's network, so for it the guard is
+enforced by configuration rather than by network isolation.
 
 ### ADR-007 — AI is optional, advisory and isolated _(planned, Phase 9)_
 **Decision:** AI features sit behind a provider interface; the platform is fully

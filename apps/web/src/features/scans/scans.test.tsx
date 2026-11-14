@@ -32,7 +32,7 @@ const scanners = [
     technique: "passive",
     description: "DNS records",
     default_profile: "default",
-    profiles: [{ name: "default", description: "Default profile" }],
+    profiles: [{ name: "default", description: "Default profile", technique: "passive" }],
     supported_asset_types: ["domain", "subdomain"],
   },
   {
@@ -41,8 +41,9 @@ const scanners = [
     description: "TCP port discovery",
     default_profile: "quick",
     profiles: [
-      { name: "quick", description: "Top 100 TCP ports" },
-      { name: "standard", description: "Top 1000 TCP ports" },
+      { name: "quick", description: "Top 100 TCP ports", technique: "active" },
+      { name: "standard", description: "Top 1000 TCP ports", technique: "active" },
+      { name: "aggressive", description: "Needs intrusive", technique: "intrusive" },
     ],
     supported_asset_types: ["ip_address", "domain"],
   },
@@ -138,6 +139,8 @@ describe("ScansPage", () => {
     expect(within(scannerSelect).queryByRole("option", { name: /dns/ })).not.toBeInTheDocument();
     await userEvent.selectOptions(scannerSelect, "nmap");
     expect(within(dialog).getByLabelText("Profile")).toHaveValue("quick");
+    // Profiles needing a stronger authorization than the asset has are hidden.
+    expect(within(within(dialog).getByLabelText("Profile")).queryByRole("option", { name: /aggressive/ })).not.toBeInTheDocument();
     await userEvent.selectOptions(within(dialog).getByLabelText("Profile"), "standard");
     await userEvent.click(within(dialog).getByRole("button", { name: "Start scan" }));
 

@@ -4,7 +4,7 @@
 > authorization records, the deny-by-default network policy and the scope engine
 > (Phase 3); scan orchestration, the scanner sandbox and the reconnaissance
 > scanners — DNS, certificate transparency, TLS, HTTP fingerprinting and Nmap
-> (Phase 4). ZAP and Nuclei arrive in Phase 5.
+> (Phase 4); OWASP ZAP, Nuclei, the egress guard and findings (Phase 5).
 
 ## 1. Principles
 
@@ -102,11 +102,33 @@ separately registered and authorized.
   authorized domain only; discovered names are reported with provenance and are
   never scanned until registered and authorized. Can be disabled with
   `SENTINELX_PASSIVE_SOURCES_ENABLED=false`.
-* **OWASP ZAP:** baseline (passive) by default; context restricted to the
-  authorized URLs; maximum duration; redirects outside scope not followed.
-* **Nuclei:** curated, reviewed, version-pinned template set; tags restricted
-  (no `intrusive`, `dos`, `fuzz`, `brute-force`, `exploit` or credential
-  templates); protocols restricted; rate limited; template IDs recorded.
+* **Egress guard (ZAP, Nuclei).** These tools resolve names themselves, so they
+  never get direct network access to targets. Each scan starts a forward proxy
+  (`sentinelx_security.egress`) that accepts only `CONNECT` tunnels and
+  absolute-form HTTP requests whose `host:port` equals the authorized target,
+  connects to the **pinned addresses** (it never resolves DNS), enforces a
+  connection/byte budget and idle timeout, and records every denied destination
+  in the scan evidence. Redirects and links to any other host — including
+  internal and metadata addresses — are therefore refused hop by hop.
+* **OWASP ZAP:** runs as a daemon in the `zap` container, whose **only** network
+  is the internal `zap-net`; its sole way out is the guard in `scanner-zap`.
+  Profile `baseline` (default, technique *active*) = traditional spider (depth 5,
+  50 children, duration-limited, subtree only) + passive rules. Profile `full`
+  adds an active scan restricted to the context and is classified **intrusive**:
+  it requires an authorization with `allow_intrusive`, which only administrators
+  can record. Each scan uses a fresh ZAP session that is cleared afterwards;
+  scans are serialized on the `scans.zap` queue.
+* **Nuclei:** version-pinned binary and template release (both SHA-256 verified
+  at image build); only allowlisted template directories (`http/misconfiguration`,
+  `http/exposures/…`, `http/technologies`, `http/exposed-panels`), only the
+  `http` protocol, excluded tags (`intrusive`, `dos`, `fuzz`, `brute-force`,
+  `default-login`, `rce`, `sqli`, `xss`, `lfi`, `ssrf`, `oast`, `exploit`,
+  `takeover`, …), interactsh disabled, update checks disabled, rate limit 20 rps,
+  concurrency 5, no retries; template IDs and versions recorded. Nuclei shares the
+  scanner container's network, so the guard is enforced by configuration
+  (`-proxy`) rather than by network isolation as for ZAP.
+* **Tool environment:** scanner subprocesses receive only `PATH`, `HOME=/tmp` and
+  a locale — never the worker's broker credentials.
 
 ## 7. Execution controls
 
@@ -142,8 +164,16 @@ Not yet enforced at the network layer: an egress firewall that only permits the
 pinned addresses (the scope engine enforces this in-process). See
 [DEPLOYMENT.md](DEPLOYMENT.md) for the recommended production control.
 
-## 8. Reporting rules
+## 8. Findings and reporting rules
 
-A finding is `confirmed` only with sufficient evidence; scanner hypotheses are
-marked as such. Reports state methodology, scope, authorization reference, tool
+Findings are derived deterministically from observations by a versioned rule set
+(`sentinelx_security/findings.py`, `RULESET_VERSION`). Third-party verdicts keep
+their own scales: ZAP risk/confidence are mapped, never upgraded, and alerts ZAP
+marks as false positives are dropped; Nuclei matches are `firm`, not
+`confirmed` (a signature match is not proof of exploitability). A finding is
+`confirmed` only when the observation itself is the proof (e.g. an expired
+certificate presented by the server). Analyst decisions (`false_positive`,
+`accepted_risk`) require a reason and are never overridden by later scans.
+
+Reports state methodology, scope, authorization reference, tool
 versions and limitations, and clearly label AI-generated commentary.

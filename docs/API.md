@@ -105,6 +105,18 @@ Readiness probe; checks PostgreSQL and Redis concurrently with a timeout.
 | `POST /scans/emergency-stop` | `settings:manage` | `{reason}`; cancels every active job platform-wide |
 | `POST /scans/resume` | `settings:manage` | Lifts the emergency stop |
 
+### Findings (Phase 5)
+
+| Method & path | Permission | Notes |
+|---------------|------------|-------|
+| `GET /projects/{id}/findings` | `findings:read` | Most severe first. Filters: `status`, `active`, `severity`, `asset_id`, `source`, `search` |
+| `GET /projects/{id}/findings/summary` | `findings:read` | Counts by status; open + acknowledged by severity |
+| `GET /projects/{id}/findings/{finding_id}` | `findings:read` | Description, remediation, references, latest 20 occurrences (observation snapshots), status history |
+| `POST /projects/{id}/findings/{finding_id}/status` | `findings:write` | `{status, reason}`; reason required for `false_positive`, `accepted_risk`, `resolved`; 409 if unchanged |
+
+`GET /scanners` now also lists `nuclei` (`baseline`, `exposures`) and `zap`
+(`baseline` = active, `full` = **intrusive**); each profile reports its technique.
+
 Observation data and evidence originate from scanned systems and are untrusted;
 they are returned as JSON/text and must be rendered as text.
 
@@ -114,6 +126,6 @@ Authentication: `Authorization: Bearer <access_token>`. `401` responses include
 
 ## Planned resources
 
-`/findings`,
+
 `/intelligence`, `/events`, `/reports`, `/ai`, `/settings` —
 introduced phase by phase (see [ROADMAP.md](ROADMAP.md)).
