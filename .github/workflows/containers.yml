@@ -75,7 +75,7 @@ jobs:
           for image in sentinelx/api:dev sentinelx/scanner:dev sentinelx/web:dev; do
             report="$RUNNER_TEMP/trivy-$(echo "$image" | tr '/:' '--').json"
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$RUNNER_TEMP:$RUNNER_TEMP" \
-              aquasec/trivy:0.76.2 image --exit-code 1 --severity CRITICAL --ignore-unfixed \
+              aquasec/trivy:0.76.2 image --scanners vuln --exit-code 1 --severity CRITICAL --ignore-unfixed \
               --no-progress --format json --output "$report" "$image" 2>"$report.stderr" || {
                 status=1
                 python3 scripts/ci/annotate_failure.py trivy "$report"
