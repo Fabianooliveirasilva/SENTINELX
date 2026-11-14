@@ -26,6 +26,11 @@ from app.middleware.request_context import REQUEST_ID_HEADER, RequestContextMidd
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.services.email import build_email_sender
 from app.services.health import DatabaseHealthCheck, HealthService, RedisHealthCheck
+from app.services.scan_dispatch import (
+    CeleryIntelDispatcher,
+    CeleryScanDispatcher,
+    create_producer,
+)
 from sentinelx_security.scope import DnsResolver, NetworkPolicy, ScopeEngine, parse_lab_networks
 
 logger = get_logger(__name__)
@@ -90,6 +95,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.access_token_service = AccessTokenService(settings)
     app.state.email_sender = build_email_sender(settings)
     app.state.scope_engine = build_scope_engine(settings)
+    # Publishing is lazy: no broker connection is opened until a scan is requested.
+    producer = create_producer(settings)
+    app.state.scan_dispatcher = CeleryScanDispatcher(producer)
+    app.state.intel_dispatcher = CeleryIntelDispatcher(producer)
 
     register_exception_handlers(app)
 

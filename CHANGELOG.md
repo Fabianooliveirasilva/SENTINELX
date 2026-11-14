@@ -6,6 +6,128 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-11-12 — Phase 8: Monitoring & events
+
+### Added
+- `security_events` timeline written atomically with the change that caused it:
+  finding created/reopened/resolved/status changed, risk-band changes, CISA KEV
+  listings, certificate expiry, scan completed/failed/cancelled/scope-denied,
+  emergency stop/resume, asset and authorization changes, skipped schedules.
+- Alert rules per project (event types, minimum severity, optional asset,
+  channels, quiet period with recorded suppressions).
+- Notification channels: e-mail and HMAC-SHA256 signed webhooks; outbox with
+  retries, exponential backoff and a delivery log; test notifications.
+- `smtp` e-mail backend (STARTTLS or implicit TLS, verified certificates).
+- Scheduled scans that run as their owner through the interactive request path.
+- `notifier` worker on its own `notifications` queue and `notify-egress` network;
+  beat entries for delivery (30 s) and schedules (60 s).
+- Permission `alerts:manage` (admin, security analyst); migration `0008`.
+- API: `/events/types`, `/projects/{id}/events`, `/events/summary`,
+  `/notification-channels`, `/alert-rules`, `/notifications`, `/scan-schedules`.
+- UI: project Events, Alerts and Schedules tabs.
+
+### Security
+- Webhook destinations are resolved per delivery, every address must pass the
+  network policy, and the request is pinned to the checked IP (no redirects, no
+  proxies, bodies never read); https is required in production, re-checked at
+  delivery time. Signing secrets are generated server-side, shown once and
+  encrypted at rest (Fernet, HKDF-derived key); audit records keep only the host.
+
+### Fixed
+- Scan jobs are queued before their Celery chain is published; a fast worker
+  could previously skip a job still marked `pending` (present since Phase 4).
+
+## [0.7.0] — 2026-11-12 — Phase 7: Risk engine
+
+### Added
+- `sentinelx_security.risk`: deterministic, versioned (1.0.0) risk model —
+  CVSS/severity base x confidence x asset criticality x exposure, plus CISA KEV,
+  EPSS and exposure-window points; factor breakdown and plain-language explanation;
+  bounded, validated weights; project posture that never drops below the worst issue.
+- FIRST EPSS client and daily sync for CVEs referenced by active findings.
+- Risk columns on findings, `finding_risk_changes` history, daily
+  `project_risk_snapshots`, EPSS columns on CVEs (migration 0007, with `cve_id`
+  backfill).
+- Rescoring on scan, correlation, asset criticality/exposure edits, KEV/EPSS
+  updates, weight changes and a daily task.
+- API: risk model and admin weights (audited, rescoring), project risk posture;
+  findings sortable/filterable by risk. UI: risk column and sort, factor
+  breakdown and history, project Risk tab with trend, Risk Model page.
+- `docs/RISK_MODEL.md`.
+
+## [0.6.0] — 2026-11-12 — Phase 6: Threat intelligence
+
+### Added
+- `sentinelx_security.intel`: NVD CVE API 2.0 client (pagination, API key, rate
+  spacing, bounded backoff, window splitting, size caps, defensive parsing), CISA
+  KEV parser, CPE 2.3 parsing and version-range matching, software inventory
+  extraction and CVE correlation.
+- Tables `cves`, `cve_matches`, `intel_product_syncs`, `intel_sources`,
+  `software_components` (migration 0006).
+- Product-driven sync: products observed by scans are fetched from NVD by an
+  `intel` worker (own queue and egress network), refreshed after a TTL; KEV daily.
+- CVE findings (`cve.<ID>`, source `intel`, always `tentative`) through the
+  standard finding lifecycle; upgrades auto-resolve; late refreshes re-correlate.
+- API: CVE search/detail, intelligence status, admin product sync, project
+  software inventory. UI: Threat Intel page, CVE detail, Software tab, CVE links
+  from findings.
+
+### Changed
+- Finding ingestion generalized (`IngestScope`) so non-scan sources share the
+  same deduplication, regression and auto-resolution rules.
+
+## [0.5.0] — 2026-11-11 — Phase 5: Vulnerability assessment
+
+### Added
+- Findings (`findings`, `finding_occurrences`, `finding_status_changes`): stable
+  fingerprints, severity, confidence, CWE, remediation, references; versioned,
+  deterministic rules turn TLS, HTTP-header, DNS/e-mail and exposed-service
+  observations into findings; ZAP/Nuclei verdicts mapped without upgrading.
+- Lifecycle: new/updated on every completed scan, regressions reopen resolved
+  findings, absent issues auto-resolve per scanner and profile, analyst
+  `false_positive`/`accepted_risk` decisions (reason required) are respected.
+- Egress guard: per-scan forward proxy admitting only the authorized host:port,
+  connecting to pinned IPs without DNS, with budgets and denied-destination evidence.
+- Nuclei adapter: pinned v3.11.1 binary and templates v10.5.1 (SHA-256 verified
+  at build), allowlisted template directories, `http` protocol only, excluded
+  intrusive/exploit tags, interactsh and update checks disabled.
+- OWASP ZAP 2.17 daemon on an internal-only network, driven through its API by a
+  dedicated `scanner-zap` worker (`scans.zap` queue, serialized); `baseline`
+  profile (spider + passive) and `full` profile (active, **intrusive**).
+- Per-profile techniques in the scanner contract; per-scanner timeouts.
+- API: findings list/summary/detail/triage. UI: Findings tab, finding detail
+  with evidence and history, triage dialog, findings delta on scan details.
+
+### Changed
+- Scanner subprocesses (Nmap, Nuclei) get a minimal environment and never inherit
+  the worker's broker credentials.
+
+## [0.4.0] — 2026-11-11 — Phase 4: Scan orchestration & reconnaissance
+
+### Added
+- Scan jobs persisted in PostgreSQL (`scan_jobs`, `scan_results`, `scan_evidence`)
+  with states `pending → queued → running → completed | failed | cancelled`;
+  `POST /projects/{id}/scans` returns `202` with the job.
+- Three-step Celery chain: orchestrator `start` (snapshot scope, mark running) →
+  sandboxed `execute` (fresh-DNS scope re-check, pinned IPs) → orchestrator `record`.
+- Scanner sandbox: separate Celery app, `scans` queue and `sentinelx/scanner` image
+  (non-root, no capabilities, read-only FS, CPU/memory/PID limits, no database
+  credentials or secret key, process recycled after every scan, `scan-egress` network).
+- Scanners: DNS posture (records, SPF, DMARC, CAA), passive certificate-transparency
+  subdomain discovery with provenance, TLS analyzer (trust, expiry, key strength,
+  legacy protocols), HTTP technology fingerprinting and security-header review,
+  Nmap TCP-connect safe profiles with `defusedxml` parsing.
+- Per-project concurrency and daily quotas, cancellation, platform-wide emergency
+  stop and resume (`platform_settings`), periodic expiry of lost jobs; all audited.
+- Frontend: Scans tab, scan configuration offering only eligible scanners and
+  profiles, execution details (scope decision, observations, evidence rendered as
+  text), emergency-stop controls.
+
+### Changed
+- `Scanner.target_for` is a class method; Nmap is limited to domain, subdomain and
+  IP assets (an application/service authorization does not cover a host-wide port
+  scan). A test asserts every scanner/asset combination yields an in-scope target.
+
 ## [0.3.0] — 2026-11-11 — Phase 3: Assets & scope enforcement
 
 ### Added

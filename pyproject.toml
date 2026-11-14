@@ -25,6 +25,7 @@ dev = [
     "bandit[toml]>=1.9.4",
     "pip-audit>=2.10.1",
     "fakeredis>=2.40.0",
+    "types-defusedxml>=0.7.0",
 ]
 
 # ---------------------------------------------------------------------------
@@ -106,3 +107,13 @@ fail_under = 85
 # ---------------------------------------------------------------------------
 [tool.bandit]
 exclude_dirs = ["apps/api/tests", "workers/tests", "security-engine/tests", "apps/web", ".venv"]
+
+# ---------------------------------------------------------------------------
+# Pyright (editor / LSP only; mypy --strict remains the type gate)
+# ---------------------------------------------------------------------------
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.12"
+extraPaths = ["apps/api"]
+exclude = ["apps/web", "**/node_modules", "**/__pycache__", ".venv"]
