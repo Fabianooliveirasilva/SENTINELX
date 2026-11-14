@@ -116,16 +116,22 @@ jobs:
 
       - name: ZAP is reachable only through the egress guard
         run: |
+          # Output is kept for the failure annotation (job logs need admin access).
+          exec > >(tee "$RUNNER_TEMP/zapcheck.log") 2>&1
           # The ZAP container has no route to the internet (internal network only).
-          if docker compose exec -T zap bash -c 'exec 3<>/dev/tcp/1.1.1.1/443' 2>/dev/null; then
+          if docker compose exec -T zap bash -c 'exec 3<>/dev/tcp/1.1.1.1/443'; then
             echo "ZAP reached the internet directly" >&2; exit 1
           fi
+          echo "ok: zap has no direct route to the internet"
           docker compose exec -T scanner-zap python -c "
           import os, httpx
           key = os.environ['SENTINELX_ZAP_API_KEY']
-          r = httpx.get('http://zap:8080/JSON/core/view/version/', headers={'X-ZAP-API-Key': key}, timeout=10)
-          r.raise_for_status(); print(r.json())
-          r = httpx.get('http://zap:8080/JSON/core/view/version/', timeout=10)
+          url = 'http://zap:8080/JSON/core/view/version/'
+          r = httpx.get(url, headers={'X-ZAP-API-Key': key}, timeout=10)
+          print('with key:', r.status_code, r.text[:200])
+          r.raise_for_status()
+          r = httpx.get(url, timeout=10)
+          print('without key:', r.status_code, r.text[:200])
           assert r.status_code in (400, 401, 403), r.status_code
           "
 
@@ -171,6 +177,8 @@ jobs:
           python3 scripts/ci/annotate_failure.py file "compose" "$RUNNER_TEMP/compose.log"
           docker images --format '{{.Repository}}:{{.Tag}} {{.Size}}' > "$RUNNER_TEMP/images.txt"
           python3 scripts/ci/annotate_failure.py file "images" "$RUNNER_TEMP/images.txt"
+          sleep 1
+          python3 scripts/ci/annotate_failure.py file "zap check" "$RUNNER_TEMP/zapcheck.log"
           python3 scripts/ci/annotate_failure.py containers
 
       - name: Compose logs on failure
