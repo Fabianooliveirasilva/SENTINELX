@@ -100,11 +100,38 @@ details. Recorded actions: `auth.login` (success/failure with internal reason),
 `project.updated`, `project.deleted`, `project.member_added`,
 `project.member_removed`.
 
+## Multi-factor authentication (TOTP)
+
+* **Factor:** RFC 6238 TOTP (HMAC-SHA1, 6 digits, 30 s, ±1 step) — compatible with
+  every authenticator app — plus 10 single-use recovery codes (50 bits each, only
+  SHA-256 digests stored).
+* **Enrolment:** `POST /auth/mfa/enroll` (needs the current password) returns the
+  base32 secret and an `otpauth://` URI once; MFA is active only after
+  `POST /auth/mfa/confirm` accepts a code, which also returns the recovery codes
+  once. The secret is encrypted at rest (Fernet, key derived from `SECRET_KEY` with a
+  dedicated HKDF label).
+* **Login:** with MFA on, `POST /auth/login` returns `{mfa_required, challenge_token}`
+  instead of tokens (no cookies). The challenge is a 5-minute JWT with `typ: mfa`
+  that the API rejects as an access token. `POST /auth/mfa/verify` takes the challenge
+  and a code, checks it under a row lock and starts the session.
+* **Replay and brute force:** each time step can be used once (`last_used_step`);
+  recovery codes are removed on use; wrong codes increment the same failure counter
+  and lockout as passwords and are rate limited per IP and per challenge.
+* **Disabling:** needs the password and a valid code. **Lost device:** a user holding
+  `users:manage` resets it with `POST /users/{id}/mfa/reset`, which also signs the
+  user out everywhere; both are audited.
+* **Audit actions:** `auth.mfa_enrollment_started`, `auth.mfa_enabled`,
+  `auth.mfa_disabled`, `auth.login_mfa_challenge`, `user.mfa_reset`.
+
 ## Known limitations
 
 * Email delivery: only `console` (development) and `disabled` backends exist; a
   production SMTP/provider backend is required before enabling password reset in
   production.
-* No multi-factor authentication yet (planned for the hardening phase).
+* MFA is optional per user (it cannot be required by policy yet), there is no QR code
+  (the setup key and `otpauth://` URI are shown as text), and enabling MFA does not
+  end sessions that were started before it.
+* A code from the *next* time step (clock drift) consumes that step, so the current
+  step's code is refused for up to 30 s afterwards.
 * The reset-request endpoint does slightly more work for existing accounts
   (token creation, email); timing differences are bounded by rate limiting.

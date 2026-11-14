@@ -1,6 +1,6 @@
 [project]
 name = "sentinelx"
-version = "0.1.0"
+version = "0.12.0"
 description = "SentinelX workspace root (not a distributable package)."
 requires-python = ">=3.12,<3.13"
 
@@ -25,6 +25,10 @@ dev = [
     "bandit[toml]>=1.9.4",
     "pip-audit>=2.10.1",
     "fakeredis>=2.40.0",
+    "types-defusedxml>=0.7.0",
+    "types-reportlab>=4.4,<5",
+    "types-pyyaml>=6.0.12.20261113",
+    "pyyaml>=6",
 ]
 
 # ---------------------------------------------------------------------------
@@ -106,3 +110,13 @@ fail_under = 85
 # ---------------------------------------------------------------------------
 [tool.bandit]
 exclude_dirs = ["apps/api/tests", "workers/tests", "security-engine/tests", "apps/web", ".venv"]
+
+# ---------------------------------------------------------------------------
+# Pyright (editor / LSP only; mypy --strict remains the type gate)
+# ---------------------------------------------------------------------------
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.12"
+extraPaths = ["apps/api"]
+exclude = ["apps/web", "**/node_modules", "**/__pycache__", ".venv"]

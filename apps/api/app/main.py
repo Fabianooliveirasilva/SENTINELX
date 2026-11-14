@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from redis.asyncio import Redis
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -24,8 +24,22 @@ from app.core.security.tokens import AccessTokenService
 from app.db.session import create_engine, create_session_factory
 from app.middleware.request_context import REQUEST_ID_HEADER, RequestContextMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
+from app.observability.metrics import (
+    CONTENT_TYPE,
+    METRICS_PATH,
+    MetricsMiddleware,
+    render,
+    token_valid,
+)
+from app.services.ai import CeleryAIDispatcher
 from app.services.email import build_email_sender
 from app.services.health import DatabaseHealthCheck, HealthService, RedisHealthCheck
+from app.services.reports import CeleryReportDispatcher
+from app.services.scan_dispatch import (
+    CeleryIntelDispatcher,
+    CeleryScanDispatcher,
+    create_producer,
+)
 from sentinelx_security.scope import DnsResolver, NetworkPolicy, ScopeEngine, parse_lab_networks
 
 logger = get_logger(__name__)
@@ -90,6 +104,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.access_token_service = AccessTokenService(settings)
     app.state.email_sender = build_email_sender(settings)
     app.state.scope_engine = build_scope_engine(settings)
+    # Publishing is lazy: no broker connection is opened until a scan is requested.
+    producer = create_producer(settings)
+    app.state.scan_dispatcher = CeleryScanDispatcher(producer)
+    app.state.intel_dispatcher = CeleryIntelDispatcher(producer)
+    app.state.ai_dispatcher = CeleryAIDispatcher(producer)
+    app.state.report_dispatcher = CeleryReportDispatcher(producer)
 
     register_exception_handlers(app)
 
@@ -111,7 +131,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
     app.add_middleware(RequestContextMiddleware)
+    app.add_middleware(MetricsMiddleware)
     app.add_middleware(SecurityHeadersMiddleware, enable_hsts=settings.is_production)
 
     app.include_router(api_router)
+    if settings.metrics_enabled:
+        _register_metrics(app, settings)
     return app
+
+
+def _register_metrics(app: FastAPI, settings: Settings) -> None:
+    token = settings.metrics_token.get_secret_value() if settings.metrics_token else None
+
+    @app.get(METRICS_PATH, include_in_schema=False)
+    async def metrics(request: Request) -> Response:
+        if not token_valid(token, request.headers.get("authorization")):
+            return Response(status_code=401, headers={"WWW-Authenticate": "Bearer"})
+        async with request.app.state.session_factory() as session:
+            body = await render(session, request.app.state.redis, settings.version)
+        return Response(body, media_type=CONTENT_TYPE)

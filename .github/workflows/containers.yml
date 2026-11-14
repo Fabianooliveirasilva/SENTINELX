@@ -1,11 +1,11 @@
 name: Containers
 
 # Builds the images, scans them, boots the full docker compose stack and runs
-# the Playwright smoke suite against it. Runs on main and for PRs that touch
-# container or dependency definitions.
+# the Playwright smoke suite against it. Runs on main, on every push to a phase
+# branch (feat/**), and for PRs that touch container or dependency definitions.
 on:
   push:
-    branches: [main]
+    branches: [main, "feat/**"]
   pull_request:
     paths:
       - "infrastructure/**"
@@ -49,6 +49,16 @@ jobs:
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
 
+      - name: Build scanner image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: infrastructure/docker/scanner.Dockerfile
+          tags: sentinelx/scanner:dev
+          load: true
+          cache-from: type=gha,scope=scanner
+          cache-to: type=gha,mode=max,scope=scanner
+
       - name: Build web image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -61,13 +71,38 @@ jobs:
 
       - name: Trivy image scan (fail on fixable CRITICAL)
         run: |
-          for image in sentinelx/api:dev sentinelx/web:dev; do
-            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.76.2 \
-              image --exit-code 1 --severity CRITICAL --ignore-unfixed --no-progress "$image"
+          status=0
+          for image in sentinelx/api:dev sentinelx/scanner:dev sentinelx/web:dev; do
+            report="$RUNNER_TEMP/trivy-$(echo "$image" | tr '/:' '--').json"
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$RUNNER_TEMP:$RUNNER_TEMP" \
+              aquasec/trivy:0.76.2 image --scanners vuln --exit-code 1 --severity CRITICAL --ignore-unfixed \
+              --no-progress --format json --output "$report" "$image" 2>"$report.stderr" || {
+                status=1
+                python3 scripts/ci/annotate_failure.py trivy "$report"
+              }
+          done
+          exit $status
+
+      # Report-only: third-party content (e.g. Nuclei template examples) can contain
+      # token-like strings. Findings are annotated by rule and file, never by value.
+      - name: Trivy secret scan (report only)
+        run: |
+          for image in sentinelx/api:dev sentinelx/scanner:dev sentinelx/web:dev; do
+            report="$RUNNER_TEMP/trivy-secrets-$(echo "$image" | tr '/:' '--').json"
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$RUNNER_TEMP:$RUNNER_TEMP" \
+              aquasec/trivy:0.76.2 image --scanners secret --exit-code 0 --no-progress \
+              --format json --output "$report" "$image" || true
+            python3 scripts/ci/annotate_failure.py trivy-secrets "$report" || true
           done
 
       - name: Start stack
-        run: docker compose up -d --no-build --wait --wait-timeout 180
+        env:
+          # The E2E suite signs in many times in parallel; production keeps the default of 10.
+          SENTINELX_RATE_LIMIT_LOGIN_PER_MINUTE: "1000"
+        run: |
+          set -o pipefail
+          docker compose config --quiet 2>&1 | tee "$RUNNER_TEMP/compose.log"
+          docker compose up -d --no-build --wait --wait-timeout 180 2>&1 | tee -a "$RUNNER_TEMP/compose.log"
 
       - name: Readiness through Nginx
         run: |
@@ -80,6 +115,44 @@ jobs:
           result = ping.delay().get(timeout=30)
           assert result['status'] == 'ok', result
           print(result)
+          "
+
+      - name: Scanner sandbox is isolated and ready
+        run: |
+          docker compose exec -T scanner sh -c 'test -z "$SENTINELX_DATABASE_URL" && test -z "$SENTINELX_SECRET_KEY"'
+          docker compose exec -T scanner nmap --version | head -1
+          docker compose exec -T scanner celery -A sentinelx_workers.scanner_app:scanner_app \
+            inspect registered --timeout 10 | grep -q sentinelx.scans.execute
+          docker compose exec -T worker celery -A sentinelx_workers.celery_app:celery_app \
+            inspect active_queues --timeout 10 | grep -q orchestrator
+          docker compose exec -T scanner nuclei -version 2>&1 | tail -1
+          docker compose exec -T scanner-zap celery -A sentinelx_workers.scanner_app:scanner_app \
+            inspect active_queues --timeout 10 | grep -q scans.zap
+
+      - name: ZAP is reachable only through the egress guard
+        run: |
+          # Output is kept for the failure annotation (job logs need admin access).
+          exec > >(tee "$RUNNER_TEMP/zapcheck.log") 2>&1
+          # The ZAP container has no route to the internet (internal network only).
+          if docker compose exec -T zap bash -c 'exec 3<>/dev/tcp/1.1.1.1/443'; then
+            echo "ZAP reached the internet directly" >&2; exit 1
+          fi
+          echo "ok: zap has no direct route to the internet"
+          docker compose exec -T scanner-zap python -c "
+          import os, httpx
+          key = os.environ['SENTINELX_ZAP_API_KEY']
+          url = 'http://zap:8080/JSON/core/view/version/'
+          r = httpx.get(url, headers={'X-ZAP-API-Key': key}, timeout=10)
+          print('with key:', r.status_code, r.text[:200])
+          r.raise_for_status()
+          # ZAP refuses a missing key either with an HTTP error or by closing the connection.
+          try:
+              r = httpx.get(url, timeout=10)
+          except httpx.TransportError as exc:
+              print('without key: connection refused by ZAP:', type(exc).__name__)
+          else:
+              print('without key:', r.status_code, r.text[:200])
+              assert r.status_code in (400, 401, 403), r.status_code
           "
 
       # The throwaway credential only ever lives in a runner temp file: it is never
@@ -105,11 +178,49 @@ jobs:
         env:
           E2E_BASE_URL: http://localhost:8080
           E2E_EXPECT_OPERATIONAL: "1"
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ runner.temp }}/playwright.json
           E2E_ADMIN_EMAIL: admin@sentinelx.example.com
         run: |
           pnpm install --frozen-lockfile
           pnpm exec playwright install --with-deps chromium
           E2E_ADMIN_PASSWORD="$(cat "$RUNNER_TEMP/e2e-admin")" pnpm test:e2e
+
+      # The metrics endpoint is not under /api, so the reverse proxy must never serve it,
+      # while it stays reachable on the internal network.
+      - name: Metrics are internal-only
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/metrics)
+          test "$code" = "404" || { echo "::error::/metrics via Nginx returned $code"; exit 1; }
+          docker compose exec -T worker python -c "
+          import httpx
+          r = httpx.get('http://api:8000/metrics', timeout=10)
+          r.raise_for_status()
+          assert 'sentinelx_http_requests_total' in r.text and 'sentinelx_build_info' in r.text
+          "
+
+      # Baseline (spider + passive rules) against the running SentinelX web app and API,
+      # unauthenticated: it checks headers, cookies and information leaks on the public
+      # surface. FAIL-level alerts fail the job; warnings are reported as annotations and
+      # kept in the artifact. Rules deliberately ignored live in .zap/rules.tsv.
+      - name: ZAP baseline against SentinelX
+        run: |
+          mkdir -p "$RUNNER_TEMP/zap" && chmod 777 "$RUNNER_TEMP/zap"
+          set +e
+          docker run --rm --network host -v "$RUNNER_TEMP/zap:/zap/wrk:rw" -v "$PWD/.zap:/zap/config:ro" \
+            zaproxy/zap-stable:2.17.0 zap-baseline.py -t http://127.0.0.1:8080 \
+            -c /zap/config/rules.tsv -r zap-baseline.html -J zap-baseline.json -m 3
+          rc=$?
+          set -e
+          python3 scripts/ci/annotate_failure.py zap "$RUNNER_TEMP/zap/zap-baseline.json" || true
+          # 0 = clean, 2 = warnings only (annotated), 1 = FAIL alerts, anything else = ZAP error.
+          if [ "$rc" -eq 1 ] || [ "$rc" -gt 2 ]; then exit 1; fi
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: zap-baseline
+          path: ${{ runner.temp }}/zap
+          retention-days: 7
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
@@ -118,10 +229,23 @@ jobs:
           path: apps/web/playwright-report
           retention-days: 7
 
+      - name: Container diagnostics on failure
+        if: failure()
+        run: |
+          python3 scripts/ci/annotate_failure.py file "compose" "$RUNNER_TEMP/compose.log"
+          docker images --format '{{.Repository}}:{{.Tag}} {{.Size}}' > "$RUNNER_TEMP/images.txt"
+          python3 scripts/ci/annotate_failure.py file "images" "$RUNNER_TEMP/images.txt"
+          sleep 1
+          python3 scripts/ci/annotate_failure.py file "zap check" "$RUNNER_TEMP/zapcheck.log"
+          python3 scripts/ci/annotate_playwright.py "$RUNNER_TEMP/playwright.json" || true
+          python3 scripts/ci/annotate_failure.py containers
+
       - name: Compose logs on failure
         if: failure()
+        continue-on-error: true
         run: docker compose logs --no-color --tail=200
 
       - name: Tear down
         if: always()
+        continue-on-error: true
         run: docker compose down -v

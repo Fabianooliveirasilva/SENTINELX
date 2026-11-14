@@ -12,11 +12,20 @@ from app.core.config import Settings
 from app.core.context import RequestMeta
 from app.core.security.passwords import PasswordService
 from app.core.security.tokens import AccessTokenService
+from app.services.ai import AIDispatcher, AIService
 from app.services.assets import AssetService
 from app.services.auth import AuthService
 from app.services.email import EmailSender
+from app.services.findings import FindingService
+from app.services.intel import IntelService
+from app.services.mfa import MfaService
+from app.services.monitoring import MonitoringService
 from app.services.projects import ProjectService
 from app.services.rate_limit import RateLimiter
+from app.services.reports import ReportDispatcher, ReportService
+from app.services.scan_dispatch import IntelDispatcher, ScanDispatcher
+from app.services.scans import ScanService
+from app.services.schedules import ScheduleService
 from app.services.users import UserService
 from sentinelx_security.scope import ScopeEngine
 
@@ -82,6 +91,15 @@ def get_auth_service(
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 
 
+def get_mfa_service(
+    session: SessionDep, settings: SettingsDep, passwords: PasswordServiceDep
+) -> MfaService:
+    return MfaService(session, settings, passwords)
+
+
+MfaServiceDep = Annotated[MfaService, Depends(get_mfa_service)]
+
+
 def get_user_service(
     session: SessionDep, passwords: PasswordServiceDep, auth: AuthServiceDep
 ) -> UserService:
@@ -111,3 +129,83 @@ def get_asset_service(
 
 
 AssetServiceDep = Annotated[AssetService, Depends(get_asset_service)]
+
+
+def get_scan_dispatcher(request: Request) -> ScanDispatcher:
+    dispatcher: ScanDispatcher = request.app.state.scan_dispatcher
+    return dispatcher
+
+
+def get_scan_service(
+    session: SessionDep,
+    engine: ScopeEngineDep,
+    settings: SettingsDep,
+    dispatcher: Annotated[ScanDispatcher, Depends(get_scan_dispatcher)],
+) -> ScanService:
+    return ScanService(session, engine, settings, dispatcher)
+
+
+ScanServiceDep = Annotated[ScanService, Depends(get_scan_service)]
+
+
+def get_finding_service(session: SessionDep) -> FindingService:
+    return FindingService(session)
+
+
+FindingServiceDep = Annotated[FindingService, Depends(get_finding_service)]
+
+
+def get_intel_service(session: SessionDep) -> IntelService:
+    return IntelService(session)
+
+
+def get_intel_dispatcher(request: Request) -> IntelDispatcher:
+    dispatcher: IntelDispatcher = request.app.state.intel_dispatcher
+    return dispatcher
+
+
+IntelServiceDep = Annotated[IntelService, Depends(get_intel_service)]
+IntelDispatcherDep = Annotated[IntelDispatcher, Depends(get_intel_dispatcher)]
+
+
+def get_monitoring_service(session: SessionDep, settings: SettingsDep) -> MonitoringService:
+    return MonitoringService(session, settings)
+
+
+def get_schedule_service(session: SessionDep) -> ScheduleService:
+    return ScheduleService(session)
+
+
+MonitoringServiceDep = Annotated[MonitoringService, Depends(get_monitoring_service)]
+ScheduleServiceDep = Annotated[ScheduleService, Depends(get_schedule_service)]
+
+
+def get_ai_dispatcher(request: Request) -> AIDispatcher:
+    dispatcher: AIDispatcher = request.app.state.ai_dispatcher
+    return dispatcher
+
+
+def get_ai_service(
+    session: SessionDep,
+    settings: SettingsDep,
+    dispatcher: Annotated[AIDispatcher, Depends(get_ai_dispatcher)],
+) -> AIService:
+    return AIService(session, settings, dispatcher)
+
+
+AIServiceDep = Annotated[AIService, Depends(get_ai_service)]
+
+
+def get_report_dispatcher(request: Request) -> ReportDispatcher:
+    dispatcher: ReportDispatcher = request.app.state.report_dispatcher
+    return dispatcher
+
+
+def get_report_service(
+    session: SessionDep,
+    dispatcher: Annotated[ReportDispatcher, Depends(get_report_dispatcher)],
+) -> ReportService:
+    return ReportService(session, dispatcher)
+
+
+ReportServiceDep = Annotated[ReportService, Depends(get_report_service)]

@@ -1,0 +1,129 @@
+name: Release
+
+# Tag-triggered release: vX.Y.Z must match the newest CHANGELOG entry and every
+# version declaration, and must point at a commit that is on main. Images are built,
+# scanned (fixable CRITICAL fails the release) and only then pushed to GHCR with
+# provenance and an SBOM; the GitHub release notes come from CHANGELOG.md.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  UV_VERSION: "0.13.7"
+  PYTHON_VERSION: "3.12.16"
+  UV_PYTHON_PREFERENCE: only-managed
+  UV_FROZEN: "1"
+
+jobs:
+  verify:
+    name: Verify tag, versions and hardening
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Tag is on main
+        run: |
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
+            || { echo "::error::Tag $GITHUB_REF_NAME is not on main"; exit 1; }
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: uv sync --all-packages
+      - name: Versions match the tag and the changelog
+        env:
+          TAG: ${{ github.ref_name }}
+        run: uv run python scripts/ci/check_release.py "$TAG"
+      - name: Container hardening review
+        run: uv run python scripts/ci/check_hardening.py
+
+  images:
+    name: Image · ${{ matrix.image }}
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        image: [api, scanner, web]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Image reference
+        id: ref
+        env:
+          OWNER: ${{ github.repository_owner }}
+          TAG: ${{ github.ref_name }}
+          IMAGE: ${{ matrix.image }}
+        run: |
+          echo "name=ghcr.io/${OWNER,,}/sentinelx-${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+      - name: Build (not pushed yet)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: infrastructure/docker/${{ matrix.image }}.Dockerfile
+          tags: release-candidate/${{ matrix.image }}:scan
+          load: true
+          cache-from: type=gha,scope=${{ matrix.image }}
+      - name: Trivy gate (fixable CRITICAL fails the release)
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.76.2 image --exit-code 1 --severity CRITICAL --ignore-unfixed \
+            --no-progress "release-candidate/${{ matrix.image }}:scan"
+      - name: Log in to GHCR
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: echo "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+      - name: Push with provenance and SBOM
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: infrastructure/docker/${{ matrix.image }}.Dockerfile
+          push: true
+          tags: |
+            ${{ steps.ref.outputs.name }}:${{ steps.ref.outputs.version }}
+            ${{ steps.ref.outputs.name }}:latest
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=${{ matrix.image }}
+
+  release:
+    name: GitHub release
+    needs: images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Release notes from CHANGELOG.md
+        env:
+          TAG: ${{ github.ref_name }}
+        run: python3 scripts/ci/check_release.py "$TAG" --notes > "$RUNNER_TEMP/notes.md"
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "SentinelX $TAG" --notes-file "$RUNNER_TEMP/notes.md"

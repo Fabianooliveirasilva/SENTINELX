@@ -21,6 +21,7 @@ GENERATED = {
     "SENTINELX_SECRET_KEY": lambda: secrets.token_urlsafe(48),
     "POSTGRES_PASSWORD": lambda: secrets.token_urlsafe(24),
     "REDIS_PASSWORD": lambda: secrets.token_urlsafe(24),
+    "ZAP_API_KEY": lambda: secrets.token_urlsafe(32),
 }
 
 

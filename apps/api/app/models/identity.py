@@ -17,6 +17,7 @@ from sqlalchemy import (
     Text,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
@@ -108,3 +109,24 @@ class PasswordResetToken(UUIDPrimaryKeyMixin, Base):
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (Index("ix_password_reset_tokens_user_id", "user_id"),)
+
+
+class UserMfa(Base):
+    """TOTP second factor. ``confirmed_at`` is null until the first valid code."""
+
+    __tablename__ = "user_mfa"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    secret_encrypted: Mapped[str] = mapped_column(Text)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Highest accepted time step: a code can never be replayed.
+    last_used_step: Mapped[int] = mapped_column(Integer, default=-1, server_default=text("-1"))
+    # SHA-256 digests of the unused recovery codes.
+    recovery_code_hashes: Mapped[list[str]] = mapped_column(
+        JSONB, default=list, server_default=text("'[]'::jsonb")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=text("now()")
+    )

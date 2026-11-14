@@ -1,4 +1,4 @@
-import { Activity, FolderKanban, LogOut, ScrollText, ShieldHalf, UserCog, Users, type LucideIcon } from "lucide-react";
+import { Activity, Bug, Radar, DatabaseZap, FolderKanban, Gauge, LayoutDashboard, LogOut, ScrollText, ShieldHalf, UserCog, Users, type LucideIcon } from "lucide-react";
 import { NavLink, Outlet } from "react-router";
 
 import { Button } from "@/components/ui/button";
@@ -16,10 +16,15 @@ interface NavItem {
 }
 
 const navigation: NavItem[] = [
-  { to: "/", label: "System Status", icon: Activity, end: true },
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/projects", label: "Projects", icon: FolderKanban, permission: "projects:read" },
+  { to: "/vulnerabilities", label: "Vulnerabilities", icon: Bug, permission: "findings:read" },
+  { to: "/reconnaissance", label: "Reconnaissance", icon: Radar, permission: "assets:read" },
+  { to: "/intelligence", label: "Threat Intel", icon: DatabaseZap, permission: "intelligence:read" },
+  { to: "/risk-model", label: "Risk Model", icon: Gauge, permission: "findings:read" },
   { to: "/users", label: "Users & Roles", icon: Users, permission: "users:read" },
   { to: "/audit-logs", label: "Audit Logs", icon: ScrollText, permission: "audit:read" },
+  { to: "/system-status", label: "System Status", icon: Activity },
   { to: "/settings/account", label: "Account", icon: UserCog },
 ];
 
@@ -30,6 +35,12 @@ export function AppLayout() {
 
   return (
     <div className="flex min-h-dvh flex-col md:flex-row">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-sm focus:text-primary-foreground"
+      >
+        Skip to main content
+      </a>
       <aside className="flex shrink-0 flex-col border-b border-border bg-surface md:sticky md:top-0 md:h-dvh md:w-60 md:border-r md:border-b-0">
         <div className="flex h-14 items-center gap-2.5 px-5">
           <ShieldHalf className="size-5 text-primary" aria-hidden="true" />
@@ -75,7 +86,7 @@ export function AppLayout() {
           </div>
         ) : null}
       </aside>
-      <main className="min-w-0 flex-1 px-4 py-6 sm:px-8">
+      <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 px-4 py-6 outline-none sm:px-8">
         {user ? (
           <div className="mb-4 flex justify-end md:hidden">
             <Button

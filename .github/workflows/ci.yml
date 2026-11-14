@@ -3,7 +3,8 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    # Phase branches are validated on every push, before their pull request exists.
+    branches: [main, "feat/**"]
   workflow_dispatch:
 
 permissions:
@@ -159,6 +160,10 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
       - run: uv sync --all-packages
+      - name: Container hardening and release consistency
+        run: |
+          uv run python scripts/ci/check_hardening.py
+          uv run python scripts/ci/check_release.py
       - name: Bandit (Python SAST)
         run: uv run bandit -c pyproject.toml -r apps/api/app workers/sentinelx_workers security-engine/sentinelx_security
       - name: pip-audit (Python dependencies)

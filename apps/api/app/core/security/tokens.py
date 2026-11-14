@@ -24,6 +24,8 @@ ALGORITHM: Final = "HS256"
 ISSUER: Final = "sentinelx"
 AUDIENCE: Final = "sentinelx-api"
 ACCESS_TOKEN_TYPE: Final = "access"  # noqa: S105 - JWT "typ" claim value
+MFA_TOKEN_TYPE: Final = "mfa"  # noqa: S105 - JWT "typ" claim value
+MFA_CHALLENGE_TTL_SECONDS: Final = 300
 _OPAQUE_TOKEN_BYTES: Final = 32
 
 
@@ -50,23 +52,38 @@ class AccessTokenService:
         self._ttl = settings.access_token_ttl_seconds
 
     def issue(self, user_id: uuid.UUID, token_version: int) -> IssuedAccessToken:
+        return self._issue(user_id, token_version, ACCESS_TOKEN_TYPE, self._ttl)
+
+    def issue_mfa_challenge(self, user_id: uuid.UUID, token_version: int) -> IssuedAccessToken:
+        """Short-lived proof that the password step succeeded; never usable as an access token."""
+        return self._issue(user_id, token_version, MFA_TOKEN_TYPE, MFA_CHALLENGE_TTL_SECONDS)
+
+    def _issue(
+        self, user_id: uuid.UUID, token_version: int, typ: str, ttl: int
+    ) -> IssuedAccessToken:
         now = datetime.now(UTC)
         payload = {
             "sub": str(user_id),
             "ver": token_version,
-            "typ": ACCESS_TOKEN_TYPE,
+            "typ": typ,
             "iss": ISSUER,
             "aud": AUDIENCE,
             "iat": now,
             "nbf": now,
-            "exp": now + timedelta(seconds=self._ttl),
+            "exp": now + timedelta(seconds=ttl),
             "jti": uuid.uuid4().hex,
         }
         return IssuedAccessToken(
-            token=jwt.encode(payload, self._key, algorithm=ALGORITHM), expires_in=self._ttl
+            token=jwt.encode(payload, self._key, algorithm=ALGORITHM), expires_in=ttl
         )
 
     def decode(self, token: str) -> AccessTokenClaims:
+        return self._decode(token, ACCESS_TOKEN_TYPE)
+
+    def decode_mfa_challenge(self, token: str) -> AccessTokenClaims:
+        return self._decode(token, MFA_TOKEN_TYPE)
+
+    def _decode(self, token: str, expected_type: str) -> AccessTokenClaims:
         try:
             payload = jwt.decode(
                 token,
@@ -77,7 +94,7 @@ class AccessTokenService:
                 options={"require": ["sub", "exp", "iat", "nbf", "iss", "aud", "typ", "ver"]},
                 leeway=5,
             )
-            if payload["typ"] != ACCESS_TOKEN_TYPE:
+            if payload["typ"] != expected_type:
                 raise InvalidTokenError("unexpected token type")
             version = payload["ver"]
             if not isinstance(version, int) or isinstance(version, bool):
