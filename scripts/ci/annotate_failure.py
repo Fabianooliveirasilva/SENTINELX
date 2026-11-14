@@ -6,6 +6,7 @@ Usage:
   annotate_failure.py trivy <report.json> # fixable CRITICAL findings of a Trivy report
   annotate_failure.py file <title> <path>  # tail of a text file (e.g. captured command output)
   annotate_failure.py zap <report.json>    # alerts of a ZAP baseline report (as warnings)
+  annotate_failure.py trivy-secrets <report.json>  # secret findings by rule and file (no values)
 
 Uses the plain Docker CLI (not compose) so it works even when the compose project
 failed to start. Log lines are already redacted by the services' logging pipeline.
@@ -78,6 +79,27 @@ def trivy(path: str) -> None:
         annotate(f"trivy {report.get('ArtifactName')}", "\n".join(sorted(set(rows))))
 
 
+def summarize_trivy_secrets(report: dict[str, Any]) -> list[str]:
+    """One line per secret finding (target, rule, severity, line); never the matched text."""
+    rows: set[str] = set()
+    for result in report.get("Results") or []:
+        for secret in result.get("Secrets") or []:
+            rows.add(
+                f"{result.get('Target')} | {secret.get('RuleID')} | {secret.get('Severity')}"
+                f" | line {secret.get('StartLine')}"
+            )
+    return sorted(rows)
+
+
+def trivy_secrets(path: str) -> None:
+    report_path = Path(path)
+    if not report_path.is_file() or not report_path.stat().st_size:
+        return
+    rows = summarize_trivy_secrets(json.loads(report_path.read_text(encoding="utf-8")))
+    if rows:
+        annotate(f"trivy secrets {report_path.stem}", "\n".join(rows), level="warning")
+
+
 def summarize_zap(report: dict[str, Any]) -> list[str]:
     """One line per alert of risk Low or higher, most severe first."""
     ranked: list[tuple[int, str, str]] = []
@@ -110,5 +132,7 @@ if __name__ == "__main__":
         file_tail(sys.argv[2], sys.argv[3])
     elif sys.argv[1] == "zap":
         zap(sys.argv[2])
+    elif sys.argv[1] == "trivy-secrets":
+        trivy_secrets(sys.argv[2])
     else:
         trivy(sys.argv[2])

@@ -48,3 +48,38 @@ def test_zap_summary_keeps_low_and_above_most_severe_first() -> None:
         "High (High) | Exposed key | 1 instance(s)",
         "Low (Medium) | Missing header | 2 instance(s)",
     ]
+
+
+def test_trivy_secret_summary_never_includes_the_match() -> None:
+    spec = importlib.util.spec_from_file_location(
+        "annotate_failure2", ROOT / "scripts/ci/annotate_failure.py"
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["annotate_failure2"] = module
+    spec.loader.exec_module(module)
+    report = {
+        "Results": [
+            {
+                "Target": "opt/nuclei-templates/x.yaml",
+                "Secrets": [
+                    {
+                        "RuleID": "generic-secret",
+                        "Severity": "HIGH",
+                        "StartLine": 7,
+                        "Match": "token = ****",
+                    },
+                    {
+                        "RuleID": "generic-secret",
+                        "Severity": "HIGH",
+                        "StartLine": 7,
+                        "Match": "token = ****",
+                    },
+                ],
+            },
+            {"Target": "clean", "Secrets": None},
+        ]
+    }
+    rows = module.summarize_trivy_secrets(report)
+    assert rows == ["opt/nuclei-templates/x.yaml | generic-secret | HIGH | line 7"]

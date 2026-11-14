@@ -83,6 +83,18 @@ jobs:
           done
           exit $status
 
+      # Report-only: third-party content (e.g. Nuclei template examples) can contain
+      # token-like strings. Findings are annotated by rule and file, never by value.
+      - name: Trivy secret scan (report only)
+        run: |
+          for image in sentinelx/api:dev sentinelx/scanner:dev sentinelx/web:dev; do
+            report="$RUNNER_TEMP/trivy-secrets-$(echo "$image" | tr '/:' '--').json"
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$RUNNER_TEMP:$RUNNER_TEMP" \
+              aquasec/trivy:0.76.2 image --scanners secret --exit-code 0 --no-progress \
+              --format json --output "$report" "$image" || true
+            python3 scripts/ci/annotate_failure.py trivy-secrets "$report" || true
+          done
+
       - name: Start stack
         run: |
           set -o pipefail
