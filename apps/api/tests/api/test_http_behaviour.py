@@ -65,6 +65,8 @@ async def test_unhandled_exception_is_generic_500(make_app: Callable[..., FastAP
     assert "hunter2" not in response.text
     assert response.json()["error"]["request_id"] == response.headers["X-Request-ID"]
     assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["Cross-Origin-Embedder-Policy"] == "require-corp"
+    assert response.headers["Cross-Origin-Resource-Policy"] == "same-origin"
 
 
 async def test_app_error_uses_its_status_and_code(make_app: Callable[..., FastAPI]) -> None:

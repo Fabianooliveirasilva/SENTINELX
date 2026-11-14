@@ -11,7 +11,7 @@ The threat analysis behind these controls is in [THREAT_MODEL.md](THREAT_MODEL.m
 |---------|--------|-------|
 | Secrets via environment, never in code; `SecretStr`; generated `.env` with mode 0600 | Implemented | `app/core/config.py`, `scripts/generate_env.py` |
 | Production guards (placeholder secrets rejected, docs disabled, JSON logs) | Implemented | `Settings._enforce_production_hardening` |
-| Strict security headers (CSP, framing, nosniff, referrer, COOP/CORP, HSTS in prod) | Implemented | `app/middleware/security_headers.py`, Nginx snippet |
+| Strict security headers (CSP, framing, nosniff, referrer, COOP/COEP/CORP, HSTS in prod) | Implemented | `app/middleware/security_headers.py`, Nginx snippet |
 | CORS allowlist (off by default, no wildcard) | Implemented | `Settings.cors_allowed_origins` |
 | Host header allowlist | Implemented | `TrustedHostMiddleware` |
 | Error handling without information leakage | Implemented | `app/core/errors.py`, `RequestContextMiddleware` |

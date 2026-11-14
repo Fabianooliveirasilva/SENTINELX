@@ -32,6 +32,8 @@ All notable changes to this project are documented here. The format follows
 ### Security
 - The MFA challenge token (`typ: mfa`, 5 minutes) is rejected as an access token; a
   second factor is verified under a row lock.
+- `Cross-Origin-Embedder-Policy: require-corp` and `Cross-Origin-Resource-Policy: same-origin`
+  on every Nginx and API response (clears the two ZAP baseline Low warnings).
 
 ## [0.11.0] — 2026-11-14 — Phase 11: Dashboard & UX
 
