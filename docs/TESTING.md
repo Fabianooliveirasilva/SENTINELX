@@ -68,7 +68,39 @@ test (RBAC seed rows are preserved). Redis-dependent behavior in API tests uses
 > Integration tests **truncate** the database they point at. Never run them
 > against a database holding data you want to keep.
 
-## Latest results (Phase 3, local run 2026-11-11)
+## Latest results (Phase 5, local run 2026-11-11)
+
+| Suite | Result |
+|-------|--------|
+| Security engine (scope, scanners, findings rules, egress guard, Nuclei/ZAP adapters) | 236 passed, 1 skipped (real Nmap binary absent locally) |
+| Backend full suite (unit + integration + engine + workers, PostgreSQL 16 local) | 444 passed; 2 real-Redis tests run in CI (they pass against a `fakeredis` TCP server); coverage 95% |
+| Frontend (Vitest) | 51 passed |
+| E2E (Playwright, Chromium, real API + PostgreSQL) | 8 passed |
+| Live pipeline smoke (API → orchestrator → scanner sandbox → record → findings) | HTTP scan of a LAN lab target created 6 findings; re-scan deduplicated all 6; triage applied |
+| Ruff / mypy strict / ESLint strict / tsc | clean |
+| Real ZAP and Nuclei runs, scanner image build, compose, Trivy | CI only (the development host does not run third-party scanner binaries) |
+
+The Nuclei test drives the real egress guard: while the fake tool "runs", it
+sends a request through the configured proxy to `169.254.169.254` and the test
+asserts the guard refused it and recorded the denial in the evidence.
+
+## Phase 4 results (local run 2026-11-11)
+
+| Suite | Result |
+|-------|--------|
+| Security engine (scope + scanner adapters with recorded fixtures and local TLS/HTTP servers) | 201 passed, 1 skipped (real Nmap binary not installed locally; runs where `nmap` exists) |
+| Backend full suite (unit + integration + engine + workers, PostgreSQL 16 local) | 403 passed; the 2 real-Redis tests also pass against a `fakeredis` TCP server; coverage 96% |
+| Frontend (Vitest) | 48 passed |
+| E2E (Playwright, Chromium, real API + PostgreSQL) | 8 passed (scan configuration and emergency stop included; no scan is launched against public hosts) |
+| Real pipeline smoke (API → orchestrator worker → scanner sandbox worker → record) | HTTP scan of a LAN lab target completed with pinned IP and fingerprints; cancel and emergency stop verified against live workers |
+| Ruff / mypy strict / ESLint strict / tsc / Bandit | clean |
+| Docker build (scanner image), compose smoke, Trivy, real-Redis tests | CI only |
+
+Scan tests never contact third parties: CT lookups use `httpx.MockTransport`
+fixtures, DNS uses fake resolvers, TLS/HTTP scanners run against servers bound to
+`127.0.0.1`, and Nmap parsing uses a recorded XML document.
+
+## Phase 3 results (local run 2026-11-11)
 
 | Suite | Result |
 |-------|--------|

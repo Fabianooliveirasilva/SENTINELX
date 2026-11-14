@@ -10,8 +10,8 @@ documentation and an explicit approval before the next phase starts.
 | 1 | Foundation & architecture | Monorepo, API/worker/web skeletons, PostgreSQL, Redis, Docker Compose, health checks, logging, test foundations, CI | **Delivered** |
 | 2 | Identity, access & tenancy | Users, Argon2id, access + rotating refresh tokens, session revocation, password reset, RBAC (Admin / Security Analyst / Viewer), projects, audit log, rate limiting, CSRF, login UI | **Delivered** |
 | 3 | Assets & scope enforcement | Asset inventory (domain, subdomain, IP, web app, API endpoint, service), authorization records, scope engine (DNS rebinding, private ranges, IPv6, redirects, SSRF), asset history, inventory UI | **Delivered** |
-| 4 | Scan orchestration & reconnaissance | Job model & states, scanner interface (`validate_scope/execute/normalize_results/handle_errors/record_evidence`), sandbox runner, DNS analyzer, passive subdomain discovery, TLS analyzer, Nmap safe profiles, technology fingerprinting | Planned |
-| 5 | Vulnerability assessment | OWASP ZAP baseline (active only with explicit authorization), Nuclei curated/pinned templates, HTTP security checks, findings normalization, evidence, lifecycle states | Planned |
+| 4 | Scan orchestration & reconnaissance | Job model & states, scanner interface (`validate_scope/execute/normalize_results/handle_errors/record_evidence`), sandbox runner, DNS analyzer, passive subdomain discovery, TLS analyzer, Nmap safe profiles, technology fingerprinting | **Delivered** |
+| 5 | Vulnerability assessment | OWASP ZAP baseline (active only with explicit authorization), Nuclei curated/pinned templates, HTTP security checks, findings normalization, evidence, lifecycle states | **Delivered** |
 | 6 | Threat intelligence | NVD sync with rate limits and caching, CVE/CWE/CPE, version-range matching with confidence, provenance | Planned |
 | 7 | Risk engine | Deterministic, versioned, explainable risk model; configurable weights | Planned |
 | 8 | Monitoring & events | Event ingestion, alerts, timeline, filters, notification abstraction (email/webhook ready) | Planned |
@@ -26,10 +26,10 @@ documentation and an explicit approval before the next phase starts.
 |-------------------|-------|
 | Authentication and RBAC working | 2 ✅ |
 | Registration and validation of authorized assets | 3 ✅ |
-| DNS reconnaissance and TLS analysis | 4 |
-| Functional Nmap integration | 4 |
-| Functional OWASP ZAP integration | 5 |
-| Controlled Nuclei integration | 5 |
+| DNS reconnaissance and TLS analysis | 4 ✅ |
+| Functional Nmap integration | 4 ✅ |
+| Functional OWASP ZAP integration | 5 ✅ |
+| Controlled Nuclei integration | 5 ✅ |
 | CVE lookup and correlation | 6 |
 | Functional risk engine | 7 |
 | Monitoring and event history | 8 |
@@ -93,17 +93,50 @@ ranges, but assets are concrete hosts so that scans never fan out over whole
 networks. Asset history is served from the append-only audit log rather than a
 second history table.
 
-## Phase 4 proposal — Scan orchestration & reconnaissance
+## Phase 4 — delivered
 
-* `scan_jobs` / `scan_results` models; job states (pending → queued → running →
-  completed | failed | cancelled) persisted in PostgreSQL; `202 + job_id` API.
-* Scanner interface `validate_scope / execute / normalize_results / handle_errors /
-  record_evidence`; every execution re-runs the scope engine and uses the pinned
-  addresses.
-* Sandbox runner: short-lived, non-root containers on a dedicated egress network
-  limited to pinned targets; CPU/memory/time limits; no secrets.
-* Scanners: DNS analyzer (dnspython), passive subdomain discovery (certificate
-  transparency) with provenance, TLS analyzer, Nmap with safe server-side profiles
-  (TCP connect, bounded ports, no intrusive NSE), technology fingerprinting.
-* Per-project concurrency quotas and an emergency stop; UI for scan configuration
-  and execution details. All adapters tested with recorded fixtures.
+| # | Criterion | Verification |
+|---|-----------|--------------|
+| 1 | `scan_jobs` / `scan_results` / `scan_evidence` persisted in PostgreSQL with states `pending → queued → running → completed \| failed \| cancelled`; `POST /projects/{id}/scans` returns `202` + job | `test_scan_lifecycle_end_to_end` |
+| 2 | Scanner interface `validate_scope / execute / normalize_results / handle_errors / record_evidence`; scope re-evaluated with fresh DNS at execution, scanners receive pinned IPs only | `test_scope_is_rechecked_at_execution_time`, `test_rebinding_domain_is_denied_at_execution`, `test_executor.py` |
+| 3 | Scanner sandbox: separate Celery app/queue and container (non-root, no capabilities, read-only FS, CPU/memory/PID limits, no DB credentials or secret key), process recycled after every scan | `test_sandbox_configuration_is_isolated`, Containers workflow |
+| 4 | Scanners: DNS posture (SPF/DMARC/CAA), passive CT subdomain discovery with provenance, TLS analyzer, Nmap TCP-connect safe profiles, HTTP technology fingerprinting + security headers — all tested with recorded fixtures or local servers | `test_scanners.py` |
+| 5 | Per-project concurrency and daily quotas, user cancellation, platform-wide emergency stop with resume, stale-job expiry | `test_concurrency_quota`, `test_cancel_queued_scan`, `test_emergency_stop`, `test_stale_jobs_expire` |
+| 6 | UI: scans list, scan configuration (only eligible scanners/profiles), execution details (scope decision, observations, evidence as inert text), emergency stop | Vitest `scans.test.tsx` |
+
+**Design notes.** Scanner output is stored as *observations*, not findings:
+findings, severity and lifecycle arrive in Phase 5. Discovered subdomains are
+never scanned automatically — they need their own registration and authorization.
+Network-level egress filtering of the sandbox (allowing only the pinned
+addresses) is enforced in-process by the scope engine today; a host/egress-proxy
+firewall is listed under production hardening in [DEPLOYMENT.md](DEPLOYMENT.md).
+
+## Phase 5 — delivered
+
+| # | Criterion | Verification |
+|---|-----------|--------------|
+| 1 | Findings with stable fingerprints, severity, confidence, CWE, remediation, references; occurrences as evidence trail; status lifecycle with history and audit | `test_findings.py` (API), `security-engine/tests/test_findings.py` |
+| 2 | Deterministic, versioned rules map Phase 4 observations (TLS, HTTP headers, DNS/e-mail, exposed services) to findings; re-scans update, regressions reopen, absent issues auto-resolve per scanner + profile; analyst suppressions respected | `test_auto_resolution_and_regression`, `test_triage_and_suppression` |
+| 3 | Egress guard: only the authorized host:port, pinned IPs, no DNS, budgets, denied destinations recorded | `security-engine/tests/test_egress.py` |
+| 4 | Nuclei: pinned and checksum-verified binary/templates, allowlisted directories, http protocol only, excluded tags, no interactsh, behind the guard | `test_vuln_scanners.py` (guard probed while the tool runs) |
+| 5 | ZAP: isolated daemon reachable only through the guard; scoped context; bounded spider; passive rules; active scan only in the `full` profile, which requires an intrusive authorization | `test_vuln_scanners.py`, `test_intrusive_profile_requires_an_intrusive_authorization`, Containers workflow |
+| 6 | UI: Findings tab (severity summary, filters), finding detail (evidence, references, history), triage with mandatory reasons, findings delta on scan details | Vitest `findings.test.tsx`, Playwright |
+
+**Limitations.** Real ZAP and Nuclei executions are exercised only in the
+Containers workflow (the development host cannot run them); adapters are tested
+against recorded API responses and JSONL output. ZAP authenticated scanning and
+API-definition import (OpenAPI) are not implemented yet.
+
+## Phase 6 proposal — Threat intelligence
+
+* NVD CVE API 2.0 client with API-key support, rate limiting, incremental sync
+  (`lastModStartDate`), caching and provenance; runs in a worker with a dedicated
+  egress path.
+* `cves`, `cpe_matches`, `cwes` tables; CPE 2.3 parsing and version-range
+  matching (incl./excl. bounds) with a confidence score; never asserting a CVE
+  from a product name alone.
+* Correlation of fingerprinted technologies (HTTP, Nmap `-sV`, Nuclei tech
+  templates) to CVEs as `tentative` findings with the matching evidence.
+* CVSS v3.1/v4.0 vectors on findings; KEV flag where available.
+* Intelligence UI: CVE search, CVE detail with affected configurations, links
+  from findings.

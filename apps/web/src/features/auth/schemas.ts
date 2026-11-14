@@ -57,4 +57,8 @@ export type Permission =
   | "audit:read"
   | "settings:manage"
   | "assets:read"
-  | "assets:write";
+  | "assets:write"
+  | "scans:read"
+  | "scans:execute"
+  | "findings:read"
+  | "findings:write";

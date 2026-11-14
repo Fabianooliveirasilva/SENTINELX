@@ -29,10 +29,18 @@ from app.main import create_app
 from app.models import User
 from app.repositories.users import UserRepository
 from app.services.email import EmailMessage
+from app.services.scan_dispatch import DispatchHandle
 from sentinelx_security.scope import NetworkPolicy, ScopeEngine, StaticResolver, parse_lab_networks
 
 ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
 TENANT_TABLES = (
+    "finding_occurrences",
+    "finding_status_changes",
+    "findings",
+    "platform_settings",
+    "scan_evidence",
+    "scan_results",
+    "scan_jobs",
     "audit_logs",
     "asset_authorizations",
     "assets",
@@ -52,6 +60,24 @@ TEST_DNS = {
     "rebind.example.com": ["93.184.215.14", "127.0.0.1"],
     "juice.lab.example.com": ["10.20.0.5"],
 }
+
+
+class RecordingDispatcher:
+    """Captures published scan chains instead of talking to a broker."""
+
+    def __init__(self) -> None:
+        self.dispatched: list[str] = []
+        self.revoked: list[str] = []
+        self.fail = False
+
+    def dispatch(self, job_id: str, scanner: str, timeout_seconds: int) -> DispatchHandle:
+        if self.fail:
+            raise ConnectionError("broker down")
+        self.dispatched.append(job_id)
+        return DispatchHandle(execute_task_id=f"exec-{job_id}")
+
+    def revoke(self, task_id: str) -> None:
+        self.revoked.append(task_id)
 
 
 class MemoryEmailSender:
@@ -91,6 +117,7 @@ class ApiStack:
     client: httpx.AsyncClient
     email: MemoryEmailSender
     settings: Settings
+    dispatcher: RecordingDispatcher
     users: dict[str, User] = field(default_factory=dict)
 
     async def create_user(
@@ -158,7 +185,11 @@ async def stack(migrated_database: None, stack_settings: Settings) -> AsyncItera
         )
         email = MemoryEmailSender()
         app.state.email_sender = email
+        dispatcher = RecordingDispatcher()
+        app.state.scan_dispatcher = dispatcher
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            yield ApiStack(app=app, client=client, email=email, settings=stack_settings)
+            yield ApiStack(
+                app=app, client=client, email=email, settings=stack_settings, dispatcher=dispatcher
+            )
         await app.state.redis.aclose()

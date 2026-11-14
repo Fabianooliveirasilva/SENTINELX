@@ -5,8 +5,12 @@ import {
   AssetDetailRoute,
   AssetsRoute,
   AuditLogsRoute,
+  FindingDetailRoute,
+  FindingsRoute,
   ProjectDetailRoute,
   ProjectsRoute,
+  ScanDetailRoute,
+  ScansRoute,
   ScopeCheckRoute,
   UsersRoute,
 } from "@/app/lazy-pages";
@@ -73,6 +77,38 @@ export const routes: RouteObject[] = [
             element: (
               <RequirePermission permission="assets:read">
                 <ScopeCheckRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/scans",
+            element: (
+              <RequirePermission permission="scans:read">
+                <ScansRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/scans/:scanId",
+            element: (
+              <RequirePermission permission="scans:read">
+                <ScanDetailRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/findings",
+            element: (
+              <RequirePermission permission="findings:read">
+                <FindingsRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/findings/:findingId",
+            element: (
+              <RequirePermission permission="findings:read">
+                <FindingDetailRoute />
               </RequirePermission>
             ),
           },

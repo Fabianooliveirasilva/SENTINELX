@@ -6,6 +6,58 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-11-11 — Phase 5: Vulnerability assessment
+
+### Added
+- Findings (`findings`, `finding_occurrences`, `finding_status_changes`): stable
+  fingerprints, severity, confidence, CWE, remediation, references; versioned,
+  deterministic rules turn TLS, HTTP-header, DNS/e-mail and exposed-service
+  observations into findings; ZAP/Nuclei verdicts mapped without upgrading.
+- Lifecycle: new/updated on every completed scan, regressions reopen resolved
+  findings, absent issues auto-resolve per scanner and profile, analyst
+  `false_positive`/`accepted_risk` decisions (reason required) are respected.
+- Egress guard: per-scan forward proxy admitting only the authorized host:port,
+  connecting to pinned IPs without DNS, with budgets and denied-destination evidence.
+- Nuclei adapter: pinned v3.11.1 binary and templates v10.5.1 (SHA-256 verified
+  at build), allowlisted template directories, `http` protocol only, excluded
+  intrusive/exploit tags, interactsh and update checks disabled.
+- OWASP ZAP 2.17 daemon on an internal-only network, driven through its API by a
+  dedicated `scanner-zap` worker (`scans.zap` queue, serialized); `baseline`
+  profile (spider + passive) and `full` profile (active, **intrusive**).
+- Per-profile techniques in the scanner contract; per-scanner timeouts.
+- API: findings list/summary/detail/triage. UI: Findings tab, finding detail
+  with evidence and history, triage dialog, findings delta on scan details.
+
+### Changed
+- Scanner subprocesses (Nmap, Nuclei) get a minimal environment and never inherit
+  the worker's broker credentials.
+
+## [0.4.0] — 2026-11-11 — Phase 4: Scan orchestration & reconnaissance
+
+### Added
+- Scan jobs persisted in PostgreSQL (`scan_jobs`, `scan_results`, `scan_evidence`)
+  with states `pending → queued → running → completed | failed | cancelled`;
+  `POST /projects/{id}/scans` returns `202` with the job.
+- Three-step Celery chain: orchestrator `start` (snapshot scope, mark running) →
+  sandboxed `execute` (fresh-DNS scope re-check, pinned IPs) → orchestrator `record`.
+- Scanner sandbox: separate Celery app, `scans` queue and `sentinelx/scanner` image
+  (non-root, no capabilities, read-only FS, CPU/memory/PID limits, no database
+  credentials or secret key, process recycled after every scan, `scan-egress` network).
+- Scanners: DNS posture (records, SPF, DMARC, CAA), passive certificate-transparency
+  subdomain discovery with provenance, TLS analyzer (trust, expiry, key strength,
+  legacy protocols), HTTP technology fingerprinting and security-header review,
+  Nmap TCP-connect safe profiles with `defusedxml` parsing.
+- Per-project concurrency and daily quotas, cancellation, platform-wide emergency
+  stop and resume (`platform_settings`), periodic expiry of lost jobs; all audited.
+- Frontend: Scans tab, scan configuration offering only eligible scanners and
+  profiles, execution details (scope decision, observations, evidence rendered as
+  text), emergency-stop controls.
+
+### Changed
+- `Scanner.target_for` is a class method; Nmap is limited to domain, subdomain and
+  IP assets (an application/service authorization does not cover a host-wide port
+  scan). A test asserts every scanner/asset combination yields an in-scope target.
+
 ## [0.3.0] — 2026-11-11 — Phase 3: Assets & scope enforcement
 
 ### Added

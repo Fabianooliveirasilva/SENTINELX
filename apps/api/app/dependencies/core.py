@@ -15,8 +15,11 @@ from app.core.security.tokens import AccessTokenService
 from app.services.assets import AssetService
 from app.services.auth import AuthService
 from app.services.email import EmailSender
+from app.services.findings import FindingService
 from app.services.projects import ProjectService
 from app.services.rate_limit import RateLimiter
+from app.services.scan_dispatch import ScanDispatcher
+from app.services.scans import ScanService
 from app.services.users import UserService
 from sentinelx_security.scope import ScopeEngine
 
@@ -111,3 +114,27 @@ def get_asset_service(
 
 
 AssetServiceDep = Annotated[AssetService, Depends(get_asset_service)]
+
+
+def get_scan_dispatcher(request: Request) -> ScanDispatcher:
+    dispatcher: ScanDispatcher = request.app.state.scan_dispatcher
+    return dispatcher
+
+
+def get_scan_service(
+    session: SessionDep,
+    engine: ScopeEngineDep,
+    settings: SettingsDep,
+    dispatcher: Annotated[ScanDispatcher, Depends(get_scan_dispatcher)],
+) -> ScanService:
+    return ScanService(session, engine, settings, dispatcher)
+
+
+ScanServiceDep = Annotated[ScanService, Depends(get_scan_service)]
+
+
+def get_finding_service(session: SessionDep) -> FindingService:
+    return FindingService(session)
+
+
+FindingServiceDep = Annotated[FindingService, Depends(get_finding_service)]

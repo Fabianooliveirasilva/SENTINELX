@@ -1,9 +1,10 @@
 # SentinelX Scanning Policy
 
-> This policy is normative. **Implemented (Phase 3):** asset registration rules,
+> This policy is normative. **Implemented:** asset registration rules,
 > authorization records, the deny-by-default network policy and the scope engine
-> (`security-engine/sentinelx_security/scope`). Scanner execution controls arrive
-> in Phases 4–5; until then SentinelX performs **no** network scanning.
+> (Phase 3); scan orchestration, the scanner sandbox and the reconnaissance
+> scanners — DNS, certificate transparency, TLS, HTTP fingerprinting and Nmap
+> (Phase 4); OWASP ZAP, Nuclei, the egress guard and findings (Phase 5).
 
 ## 1. Principles
 
@@ -89,24 +90,90 @@ separately registered and authorized.
 
 ## 6. Tool-specific rules
 
-* **Nmap:** server-defined profiles only; TCP connect scans; bounded port sets;
-  `--max-rate`, `--host-timeout` and overall timeouts enforced; NSE limited to
-  an allowlist of `safe`/`default`/`version` scripts.
-* **OWASP ZAP:** baseline (passive) by default; context restricted to the
-  authorized URLs; maximum duration; redirects outside scope not followed.
-* **Nuclei:** curated, reviewed, version-pinned template set; tags restricted
-  (no `intrusive`, `dos`, `fuzz`, `brute-force`, `exploit` or credential
-  templates); protocols restricted; rate limited; template IDs recorded.
+* **Nmap:** server-defined profiles only (`quick`, `standard`, `web`); TCP
+  connect scans (`-sT`) as an unprivileged user; bounded port sets; `--max-rate`,
+  `--max-retries`, `--host-timeout` and an overall timeout enforced; no NSE script
+  selection (only `-sV --version-light` probes); forbidden options (`--script`,
+  `-A`, `-O`, `-sS`, `-sU`, decoys, spoofing, fragmentation) are rejected by a test.
+* **HTTP fingerprinting:** one `GET` per pinned address, sent to the IP with the
+  original `Host` header and SNI; redirects are recorded, never followed; bodies
+  read up to 256 KiB and matched only against fixed patterns.
+* **Passive sources:** certificate transparency (crt.sh) is queried for the
+  authorized domain only; discovered names are reported with provenance and are
+  never scanned until registered and authorized. Can be disabled with
+  `SENTINELX_PASSIVE_SOURCES_ENABLED=false`.
+* **Egress guard (ZAP, Nuclei).** These tools resolve names themselves, so they
+  never get direct network access to targets. Each scan starts a forward proxy
+  (`sentinelx_security.egress`) that accepts only `CONNECT` tunnels and
+  absolute-form HTTP requests whose `host:port` equals the authorized target,
+  connects to the **pinned addresses** (it never resolves DNS), enforces a
+  connection/byte budget and idle timeout, and records every denied destination
+  in the scan evidence. Redirects and links to any other host — including
+  internal and metadata addresses — are therefore refused hop by hop.
+* **OWASP ZAP:** runs as a daemon in the `zap` container, whose **only** network
+  is the internal `zap-net`; its sole way out is the guard in `scanner-zap`.
+  Profile `baseline` (default, technique *active*) = traditional spider (depth 5,
+  50 children, duration-limited, subtree only) + passive rules. Profile `full`
+  adds an active scan restricted to the context and is classified **intrusive**:
+  it requires an authorization with `allow_intrusive`, which only administrators
+  can record. Each scan uses a fresh ZAP session that is cleared afterwards;
+  scans are serialized on the `scans.zap` queue.
+* **Nuclei:** version-pinned binary and template release (both SHA-256 verified
+  at image build); only allowlisted template directories (`http/misconfiguration`,
+  `http/exposures/…`, `http/technologies`, `http/exposed-panels`), only the
+  `http` protocol, excluded tags (`intrusive`, `dos`, `fuzz`, `brute-force`,
+  `default-login`, `rce`, `sqli`, `xss`, `lfi`, `ssrf`, `oast`, `exploit`,
+  `takeover`, …), interactsh disabled, update checks disabled, rate limit 20 rps,
+  concurrency 5, no retries; template IDs and versions recorded. Nuclei shares the
+  scanner container's network, so the guard is enforced by configuration
+  (`-proxy`) rather than by network isolation as for ZAP.
+* **Tool environment:** scanner subprocesses receive only `PATH`, `HOME=/tmp` and
+  a locale — never the worker's broker credentials.
 
 ## 7. Execution controls
 
-Isolated, short-lived, non-root sandbox containers; CPU/memory/time limits; no
-access to application secrets or internal networks; egress limited to the
-validated target set; output size limits; operator **emergency stop** that
-cancels all running jobs of a project.
+Implemented in Phase 4:
 
-## 8. Reporting rules
+* **Two scope checks.** The API runs a static preflight (asset active, current
+  authorization permits the scanner's technique, scanner supports the asset
+  type). The authoritative check runs again *inside the sandbox* immediately
+  before execution, against a fresh snapshot of the project's authorizations and
+  fresh DNS. Scanners connect only to the addresses pinned by that decision; a
+  revoked authorization or a rebinding answer between request and execution
+  denies the job (`scope_denied`, audited as `scan.scope_denied`).
+* **Sandbox.** The `scanner` service consumes only the `scans` queue. It runs as
+  a non-root user with no Linux capabilities, a read-only root filesystem, CPU,
+  memory and PID limits, and **no database URL or signing secret**. The worker
+  process is recycled after every scan. It is the only container attached to the
+  `scan-egress` network.
+* **Server-side profiles only.** The request carries a scanner name and a profile
+  name validated against an allowlist; no flags, ports or scripts can be supplied.
+* **Time and size limits.** Per-scan timeout (`SENTINELX_SCAN_TIMEOUT_SECONDS`),
+  Celery soft/hard limits, per-tool timeouts with process-group kill, response and
+  evidence size caps, observation count caps.
+* **Quotas.** `SENTINELX_MAX_CONCURRENT_SCANS_PER_PROJECT` and
+  `SENTINELX_MAX_DAILY_SCANS_PER_PROJECT`, enforced under a per-project row lock.
+* **Cancellation and emergency stop.** Analysts can cancel their project's jobs;
+  administrators can trigger a **platform-wide emergency stop** that cancels every
+  pending, queued and running job (terminating the sandbox task) and blocks new
+  scans until scanning is explicitly resumed. Both are audited.
+* **Lost work.** Jobs whose messages were lost are failed by a periodic expiry
+  task, so a broker outage never leaves jobs "running" forever.
 
-A finding is `confirmed` only with sufficient evidence; scanner hypotheses are
-marked as such. Reports state methodology, scope, authorization reference, tool
+Not yet enforced at the network layer: an egress firewall that only permits the
+pinned addresses (the scope engine enforces this in-process). See
+[DEPLOYMENT.md](DEPLOYMENT.md) for the recommended production control.
+
+## 8. Findings and reporting rules
+
+Findings are derived deterministically from observations by a versioned rule set
+(`sentinelx_security/findings.py`, `RULESET_VERSION`). Third-party verdicts keep
+their own scales: ZAP risk/confidence are mapped, never upgraded, and alerts ZAP
+marks as false positives are dropped; Nuclei matches are `firm`, not
+`confirmed` (a signature match is not proof of exploitability). A finding is
+`confirmed` only when the observation itself is the proof (e.g. an expired
+certificate presented by the server). Analyst decisions (`false_positive`,
+`accepted_risk`) require a reason and are never overridden by later scans.
+
+Reports state methodology, scope, authorization reference, tool
 versions and limitations, and clearly label AI-generated commentary.
