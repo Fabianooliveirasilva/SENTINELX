@@ -3,8 +3,13 @@ import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
 
 export function Table({ className, ...props }: ComponentProps<"table">) {
+  const label = props["aria-label"];
   return (
-    <div className="w-full overflow-x-auto">
+    // The scroll container must be reachable by keyboard so wide tables can be scrolled without a mouse.
+    <div
+      className="w-full overflow-x-auto"
+      {...(label ? { role: "region", "aria-label": `${label} (scrollable)`, tabIndex: 0 } : {})}
+    >
       <table className={cn("w-full border-collapse text-sm", className)} {...props} />
     </div>
   );

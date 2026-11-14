@@ -29,7 +29,7 @@ function SeveritySummary({ projectId }: { projectId: string }) {
   const summary = useQuery({ queryKey: findingsKeys.summary(projectId), queryFn: () => findingsSummary(projectId) });
   if (!summary.data) return null;
   return (
-    <ul aria-label="Open findings by severity" className="grid grid-cols-5 gap-2">
+    <ul aria-label="Open findings by severity" className="grid grid-cols-2 gap-2 sm:grid-cols-5">
       {SEVERITIES.map((severity) => (
         <li key={severity} className="rounded-md border border-border bg-surface-raised px-3 py-2">
           <SeverityBadge severity={severity} />

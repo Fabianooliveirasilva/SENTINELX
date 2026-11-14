@@ -44,6 +44,7 @@ const SchedulesPage = lazy(() =>
 );
 const AIAnalystPage = lazy(() => import("@/features/ai/ai-page").then((m) => ({ default: m.AIAnalystPage })));
 const ReportsPage = lazy(() => import("@/features/reports/reports-page").then((m) => ({ default: m.ReportsPage })));
+const DashboardPage = lazy(() => import("@/features/dashboard/dashboard-page").then((m) => ({ default: m.DashboardPage })));
 const AccountPage = lazy(() => import("@/features/settings/account-page").then((m) => ({ default: m.AccountPage })));
 
 function Loading({ children }: { children: ReactNode }) {
@@ -160,5 +161,24 @@ export const AIAnalystRoute = () => (
 export const ReportsRoute = () => (
   <Loading>
     <ReportsPage />
+  </Loading>
+);
+const VulnerabilitiesPage = lazy(() =>
+  import("@/features/portfolio/vulnerabilities-page").then((m) => ({ default: m.VulnerabilitiesPage })),
+);
+const ReconPage = lazy(() => import("@/features/portfolio/recon-page").then((m) => ({ default: m.ReconPage })));
+export const VulnerabilitiesRoute = () => (
+  <Loading>
+    <VulnerabilitiesPage />
+  </Loading>
+);
+export const ReconRoute = () => (
+  <Loading>
+    <ReconPage />
+  </Loading>
+);
+export const DashboardRoute = () => (
+  <Loading>
+    <DashboardPage />
   </Loading>
 );
