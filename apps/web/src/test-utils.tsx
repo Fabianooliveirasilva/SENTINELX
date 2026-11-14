@@ -51,6 +51,16 @@ export const ALL_PERMISSIONS = [
   "settings:manage",
   "assets:read",
   "assets:write",
+  "scans:read",
+  "scans:execute",
+  "findings:read",
+  "findings:write",
+  "intelligence:read",
+  "events:read",
+  "alerts:manage",
+  "ai:use",
+  "reports:read",
+  "reports:generate",
 ];
 
 /** Put the session store in an authenticated state for component tests. */

@@ -6,8 +6,18 @@
 #   open http://localhost:8080
 #
 # Network design:
-#   backend  (internal: no outbound internet) -> postgres, redis, migrate, api, worker
-#   frontend (bridge, 172.30.10.0/24)          -> web (fixed IP), api
+#   backend     (internal: no outbound internet) -> postgres, redis, migrate, api, worker, scanner
+#   frontend    (bridge, 172.30.10.0/24)          -> web (fixed IP), api
+#   scan-egress (bridge, outbound)                -> scanner, scanner-zap (the only containers
+#               that talk to scan targets; no database credentials or secret key)
+#   intel-egress (bridge, outbound)               -> intel only (NVD API and CISA KEV feed)
+#   ai-egress (bridge, outbound)                  -> ai only (Anthropic API; the only
+#               container holding the provider API key)
+#   notify-egress (bridge, outbound)              -> notifier only (SMTP relay, alert webhooks;
+#               webhook destinations are re-resolved and policy-checked per delivery)
+#   zap-net     (internal: no outbound)           -> zap, scanner-zap. ZAP's ONLY route out is
+#               the egress guard inside scanner-zap, which admits the authorized
+#               origin only and connects to the scope engine's pinned addresses.
 # Only the web (8080) and API (8000) ports are published, and only on 127.0.0.1.
 
 name: sentinelx
@@ -45,9 +55,20 @@ x-app: &app
     SENTINELX_CORS_ALLOWED_ORIGINS: ${SENTINELX_CORS_ALLOWED_ORIGINS:-}
     SENTINELX_FRONTEND_BASE_URL: ${SENTINELX_FRONTEND_BASE_URL:-http://localhost:8080}
     SENTINELX_EMAIL_BACKEND: ${SENTINELX_EMAIL_BACKEND:-console}
+    SENTINELX_SMTP_HOST: ${SENTINELX_SMTP_HOST:-}
+    SENTINELX_SMTP_PORT: ${SENTINELX_SMTP_PORT:-587}
+    SENTINELX_SMTP_USERNAME: ${SENTINELX_SMTP_USERNAME:-}
+    SENTINELX_SMTP_PASSWORD: ${SENTINELX_SMTP_PASSWORD:-}
+    SENTINELX_SMTP_SECURITY: ${SENTINELX_SMTP_SECURITY:-starttls}
+    SENTINELX_EMAIL_FROM: ${SENTINELX_EMAIL_FROM:-SentinelX <no-reply@sentinelx.example.com>}
     SENTINELX_ALLOW_SELF_REGISTRATION: ${SENTINELX_ALLOW_SELF_REGISTRATION:-false}
+    # Login attempts per minute (per IP and per account); CI raises it for the parallel E2E suite.
+    SENTINELX_RATE_LIMIT_LOGIN_PER_MINUTE: ${SENTINELX_RATE_LIMIT_LOGIN_PER_MINUTE:-10}
     SENTINELX_SCOPE_LAB_NETWORKS: ${SENTINELX_SCOPE_LAB_NETWORKS:-}
     SENTINELX_SCOPE_LAB_DOMAINS: ${SENTINELX_SCOPE_LAB_DOMAINS:-}
+    SENTINELX_AI_PROVIDER: ${SENTINELX_AI_PROVIDER:-disabled}
+    SENTINELX_AI_MODEL: ${SENTINELX_AI_MODEL:-claude-opus-5-5}
+    SENTINELX_AI_DAILY_TOKEN_BUDGET_PER_PROJECT: ${SENTINELX_AI_DAILY_TOKEN_BUDGET_PER_PROJECT:-300000}
 
 services:
   postgres:
@@ -134,6 +155,9 @@ services:
       - -A
       - sentinelx_workers.celery_app:celery_app
       - worker
+      - --queues=celery,orchestrator
+      - --beat
+      - --schedule=/tmp/celerybeat-schedule
       - --loglevel=INFO
       - --concurrency=2
       - --without-gossip
@@ -151,6 +175,208 @@ services:
     deploy:
       resources:
         limits: { cpus: "1.0", memory: 512M }
+
+  scanner:
+    <<: *hardening
+    build:
+      context: .
+      dockerfile: infrastructure/docker/scanner.Dockerfile
+    image: sentinelx/scanner:dev
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop: [ALL]
+    # Deliberately minimal: broker access and scope tuning only. No database URL,
+    # no secret key. Scope is re-evaluated here with fresh DNS before every scan.
+    environment:
+      SENTINELX_LOG_LEVEL: ${SENTINELX_LOG_LEVEL:-INFO}
+      SENTINELX_LOG_JSON: "true"
+      SENTINELX_CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@redis:6379/1
+      SENTINELX_SCOPE_LAB_NETWORKS: ${SENTINELX_SCOPE_LAB_NETWORKS:-}
+      SENTINELX_SCOPE_LAB_DOMAINS: ${SENTINELX_SCOPE_LAB_DOMAINS:-}
+      SENTINELX_PASSIVE_SOURCES_ENABLED: ${SENTINELX_PASSIVE_SOURCES_ENABLED:-true}
+    networks: [backend, scan-egress]
+    depends_on:
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A sentinelx_workers.scanner_app:scanner_app inspect ping -d celery@$$HOSTNAME --timeout 5 | grep -q pong"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M, pids: 256 }
+
+  # Threat-intelligence worker: the only database-connected container with egress,
+  # used solely for the NVD API and the CISA KEV feed.
+  intel:
+    <<: *app
+    command:
+      - celery
+      - -A
+      - sentinelx_workers.celery_app:celery_app
+      - worker
+      - --queues=intel
+      - --concurrency=1
+      - --loglevel=INFO
+      - --without-gossip
+      - --without-mingle
+    environment:
+      <<: *app-env
+      SENTINELX_NVD_API_KEY: ${SENTINELX_NVD_API_KEY:-}
+      SENTINELX_INTEL_ENABLED: ${SENTINELX_INTEL_ENABLED:-true}
+    networks: [backend, intel-egress]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A sentinelx_workers.celery_app:celery_app inspect ping -d celery@$$HOSTNAME --timeout 5 | grep -q pong"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 384M }
+
+  # Runs AI analyses. The only container with the provider API key and egress to it.
+  ai:
+    <<: *app
+    command:
+      - celery
+      - -A
+      - sentinelx_workers.celery_app:celery_app
+      - worker
+      - --queues=ai
+      - --concurrency=2
+      - --loglevel=INFO
+      - --without-gossip
+      - --without-mingle
+    environment:
+      <<: *app-env
+      SENTINELX_ANTHROPIC_API_KEY: ${SENTINELX_ANTHROPIC_API_KEY:-}
+      SENTINELX_AI_EFFORT: ${SENTINELX_AI_EFFORT:-medium}
+    networks: [backend, ai-egress]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A sentinelx_workers.celery_app:celery_app inspect ping -d celery@$$HOSTNAME --timeout 5 | grep -q pong"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 384M }
+
+  # Delivers alert notifications (e-mail, signed webhooks) from the database outbox.
+  notifier:
+    <<: *app
+    command:
+      - celery
+      - -A
+      - sentinelx_workers.celery_app:celery_app
+      - worker
+      - --queues=notifications
+      - --concurrency=1
+      - --loglevel=INFO
+      - --without-gossip
+      - --without-mingle
+    environment:
+      <<: *app-env
+      SENTINELX_WEBHOOK_ALLOWED_NETWORKS: ${SENTINELX_WEBHOOK_ALLOWED_NETWORKS:-}
+    networks: [backend, notify-egress]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A sentinelx_workers.celery_app:celery_app inspect ping -d celery@$$HOSTNAME --timeout 5 | grep -q pong"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256M }
+
+  # ZAP scans run one at a time on their own queue: the ZAP daemon holds a single
+  # session. This worker hosts the egress guard ZAP must use (port 8899).
+  scanner-zap:
+    <<: *hardening
+    image: sentinelx/scanner:dev
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop: [ALL]
+    command:
+      - celery
+      - -A
+      - sentinelx_workers.scanner_app:scanner_app
+      - worker
+      - --queues=scans.zap
+      - --concurrency=1
+      - --loglevel=INFO
+      - --without-gossip
+      - --without-mingle
+    environment:
+      SENTINELX_LOG_LEVEL: ${SENTINELX_LOG_LEVEL:-INFO}
+      SENTINELX_LOG_JSON: "true"
+      SENTINELX_CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@redis:6379/1
+      SENTINELX_SCOPE_LAB_NETWORKS: ${SENTINELX_SCOPE_LAB_NETWORKS:-}
+      SENTINELX_SCOPE_LAB_DOMAINS: ${SENTINELX_SCOPE_LAB_DOMAINS:-}
+      SENTINELX_ZAP_API_URL: http://zap:8080
+      SENTINELX_ZAP_API_KEY: ${ZAP_API_KEY:?set ZAP_API_KEY in .env (run make env)}
+      SENTINELX_ZAP_PROXY_HOST: scanner-zap
+      SENTINELX_ZAP_PROXY_PORT: "8899"
+    networks: [backend, scan-egress, zap-net]
+    depends_on:
+      redis: { condition: service_healthy }
+      zap: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A sentinelx_workers.scanner_app:scanner_app inspect ping -d celery@$$HOSTNAME --timeout 5 | grep -q pong"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M, pids: 256 }
+
+  # OWASP ZAP daemon: no route to the internet or the backend network.
+  zap:
+    <<: *hardening
+    image: zaproxy/zap-stable:2.17.0
+    command:
+      - zap.sh
+      - -daemon
+      - -silent
+      - -host
+      - 0.0.0.0
+      - -port
+      - "8080"
+      - -config
+      - api.key=${ZAP_API_KEY:?set ZAP_API_KEY in .env (run make env)}
+      - -config
+      - api.addrs.addr.name=.*
+      - -config
+      - api.addrs.addr.regex=true
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+      - /home/zap/.ZAP:size=512m,uid=1000,gid=1000
+    cap_drop: [ALL]
+    networks: [zap-net]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080'"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    deploy:
+      resources:
+        limits: { cpus: "1.5", memory: 2G, pids: 512 }
 
   web:
     <<: *hardening
@@ -181,6 +407,16 @@ services:
 networks:
   backend:
     internal: true
+  scan-egress:
+    driver: bridge
+  zap-net:
+    internal: true
+  intel-egress:
+    driver: bridge
+  notify-egress:
+    driver: bridge
+  ai-egress:
+    driver: bridge
   frontend:
     ipam:
       config:
