@@ -91,6 +91,7 @@ TB1 user→platform · TB2 app→data stores · TB3 worker→sandbox · TB4 sand
 | T30 | E | Scheduled scans outliving the authority that created them | Every run goes through the interactive request path as the owner: active account, `scans:execute`, project membership, current authorization window, quotas and emergency stop; failures recorded and emitted | **Implemented** |
 | T31 | D | Alert storms (many findings × rules × channels) | Quiet periods with recorded suppression; per-project limits (20 channels, 50 rules, 20 recipients, 100 schedules); batched delivery | **Implemented** |
 | T32 | D/I | Runaway AI cost or quota exhaustion | Per-project daily token budget, per-request output cap, timeout and single retry, identical-request reuse, `ai:use` permission, usage visible per project | **Implemented** |
+| T33 | T/I | Scanned content injecting markup into reports (images, links, local file references) or reports leaking across projects | All text escaped before ReportLab paragraph markup; evidence in a non-parsing block; no HTML engine; downloads authorized per project, audited, `no-store`; checksum stored | **Implemented** |
 | T27 | T/R | Risk ranking manipulated to hide issues (weights set to zero, silent formula changes) | Weights bounded (e.g. severity defaults and multipliers cannot be zero), admin-only, audited with before/after values; formula changes require a new model version stored with every score; history of every score change | **Implemented** |
 
 ## 5. Residual risks and assumptions

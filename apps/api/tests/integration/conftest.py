@@ -34,6 +34,7 @@ from sentinelx_security.scope import NetworkPolicy, ScopeEngine, StaticResolver,
 
 ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
 TENANT_TABLES = (
+    "reports",
     "ai_analyses",
     "notifications",
     "alert_rule_channels",
@@ -113,6 +114,17 @@ class RecordingAIDispatcher:
         self.dispatched.append(analysis_id)
 
 
+class RecordingReportDispatcher:
+    def __init__(self) -> None:
+        self.dispatched: list[str] = []
+        self.fail = False
+
+    def dispatch(self, report_id: str) -> None:
+        if self.fail:
+            raise ConnectionError("broker down")
+        self.dispatched.append(report_id)
+
+
 class MemoryEmailSender:
     def __init__(self) -> None:
         self.outbox: list[EmailMessage] = []
@@ -153,6 +165,7 @@ class ApiStack:
     dispatcher: RecordingDispatcher
     intel_dispatcher: RecordingIntelDispatcher
     ai_dispatcher: RecordingAIDispatcher
+    report_dispatcher: RecordingReportDispatcher
     users: dict[str, User] = field(default_factory=dict)
 
     async def create_user(
@@ -226,6 +239,8 @@ async def stack(migrated_database: None, stack_settings: Settings) -> AsyncItera
         app.state.intel_dispatcher = intel_dispatcher
         ai_dispatcher = RecordingAIDispatcher()
         app.state.ai_dispatcher = ai_dispatcher
+        report_dispatcher = RecordingReportDispatcher()
+        app.state.report_dispatcher = report_dispatcher
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             yield ApiStack(
@@ -236,5 +251,6 @@ async def stack(migrated_database: None, stack_settings: Settings) -> AsyncItera
                 dispatcher=dispatcher,
                 intel_dispatcher=intel_dispatcher,
                 ai_dispatcher=ai_dispatcher,
+                report_dispatcher=report_dispatcher,
             )
         await app.state.redis.aclose()

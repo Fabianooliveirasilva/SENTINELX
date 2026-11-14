@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-11-13 — Phase 10: Reporting
+
+### Added
+- Reports (`reports`): project or single-scan scope, PDF and JSON formats from one
+  versioned document (`sentinelx-report/1.0`): executive summary, scope,
+  authorization references, methodology, scan dates, findings with risk,
+  CVE/KEV/EPSS and bounded evidence, severity distribution, risk prioritization,
+  remediation plan, reviewed AI commentary (labelled), tool versions, limitations.
+- Asynchronous generation on the orchestrator worker; SHA-256 and size stored;
+  authenticated, audited downloads with checksum header; deletion.
+- PDF rendering with ReportLab (no HTML engine, nothing fetched).
+- UI: Reports tab with builder, history and download. Migration `0010`.
+
+### Security
+- All report text is escaped before ReportLab's paragraph markup; evidence is
+  rendered in a non-parsing block, so scanned content cannot inject images, links
+  or file references into a PDF.
+
 ## [0.9.0] — 2026-11-13 — Phase 9: AI security analyst
 
 ### Added

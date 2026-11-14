@@ -68,7 +68,24 @@ test (RBAC seed rows are preserved). Redis-dependent behavior in API tests uses
 > Integration tests **truncate** the database they point at. Never run them
 > against a database holding data you want to keep.
 
-## Latest results (Phase 9, local run 2026-11-13)
+## Latest results (Phase 10, local run 2026-11-13)
+
+| Suite | Result |
+|-------|--------|
+| Backend full suite (unit + integration + engine + workers, PostgreSQL 16 local) | 554 passed, 1 skipped (real Nmap binary absent locally); coverage 94% |
+| Reports (content, integrity, AI labelling, scopes, permissions, PDF safety and determinism, remediation ordering) | 5 integration + 4 unit tests |
+| Frontend (Vitest) | 70 passed |
+| E2E (Playwright, Chromium, real API + PostgreSQL + workers) | 11 passed (includes generating and downloading a PDF) |
+| Live report (LAN lab HTTP scan → findings → reviewed AI summary → PDF via worker → download, SHA-256 verified) | 6 findings, 7 pages, inspected visually |
+| Migration `0010` upgrade → `alembic check` → downgrade → upgrade | clean |
+| Ruff / mypy strict / ESLint strict / tsc / Bandit / pip-audit / pnpm audit | clean |
+
+The PDF safety test renders findings whose titles, descriptions, evidence and AI
+text contain `<img src="/etc/passwd">`, links, font tags and control characters,
+and asserts the PDF has no image, link or URI objects while the text is present
+literally.
+
+## Phase 9 results (local run 2026-11-13)
 
 | Suite | Result |
 |-------|--------|

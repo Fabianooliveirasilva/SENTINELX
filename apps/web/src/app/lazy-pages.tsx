@@ -43,6 +43,7 @@ const SchedulesPage = lazy(() =>
   import("@/features/monitoring/schedules-page").then((m) => ({ default: m.SchedulesPage })),
 );
 const AIAnalystPage = lazy(() => import("@/features/ai/ai-page").then((m) => ({ default: m.AIAnalystPage })));
+const ReportsPage = lazy(() => import("@/features/reports/reports-page").then((m) => ({ default: m.ReportsPage })));
 const AccountPage = lazy(() => import("@/features/settings/account-page").then((m) => ({ default: m.AccountPage })));
 
 function Loading({ children }: { children: ReactNode }) {
@@ -154,5 +155,10 @@ export const SchedulesRoute = () => (
 export const AIAnalystRoute = () => (
   <Loading>
     <AIAnalystPage />
+  </Loading>
+);
+export const ReportsRoute = () => (
+  <Loading>
+    <ReportsPage />
   </Loading>
 );

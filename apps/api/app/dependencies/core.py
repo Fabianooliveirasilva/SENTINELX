@@ -21,6 +21,7 @@ from app.services.intel import IntelService
 from app.services.monitoring import MonitoringService
 from app.services.projects import ProjectService
 from app.services.rate_limit import RateLimiter
+from app.services.reports import ReportDispatcher, ReportService
 from app.services.scan_dispatch import IntelDispatcher, ScanDispatcher
 from app.services.scans import ScanService
 from app.services.schedules import ScheduleService
@@ -183,3 +184,18 @@ def get_ai_service(
 
 
 AIServiceDep = Annotated[AIService, Depends(get_ai_service)]
+
+
+def get_report_dispatcher(request: Request) -> ReportDispatcher:
+    dispatcher: ReportDispatcher = request.app.state.report_dispatcher
+    return dispatcher
+
+
+def get_report_service(
+    session: SessionDep,
+    dispatcher: Annotated[ReportDispatcher, Depends(get_report_dispatcher)],
+) -> ReportService:
+    return ReportService(session, dispatcher)
+
+
+ReportServiceDep = Annotated[ReportService, Depends(get_report_service)]

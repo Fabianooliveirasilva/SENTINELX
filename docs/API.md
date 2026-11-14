@@ -172,6 +172,23 @@ backoff; other statuses and refused destinations fail permanently.
 
 Event titles and details can contain scanner-derived text and must be rendered as text.
 
+### Reports (Phase 10)
+
+| Method & path | Permission | Notes |
+|---------------|------------|-------|
+| `POST /projects/{id}/reports` | `reports:generate` | `{scope: project\|scan, scan_job_id?, format: pdf\|json, title?, include_resolved, include_ai, include_evidence}` → 202; poll until `completed` |
+| `GET /projects/{id}/reports` | `reports:read` | History (status, size, SHA-256, summary); never the content |
+| `GET /projects/{id}/reports/{report_id}` | `reports:read` | Status |
+| `GET /projects/{id}/reports/{report_id}/download` | `reports:read` | The file (`application/pdf` or `application/json`), `Content-Disposition: attachment`, `X-Content-SHA256`, `Cache-Control: no-store`; 409 until completed; audited |
+| `DELETE /projects/{id}/reports/{report_id}` | `reports:generate` | 204; audited |
+
+The JSON format is the report document itself (`schema_version:
+"sentinelx-report/1.0"`): `report`, `project`, `executive_summary`, `scope`
+(`assets`, `authorizations`), `methodology`, `scans`, `tool_versions`,
+`severity_distribution`, `findings[]` (with `evidence[]` excerpts), `remediation_plan`,
+`ai_commentary[]` (reviewed analyses only, each with `label`, `provider`, `model`,
+`prompt_version`, `reviewed_by`) and `limitations`.
+
 ### AI analyst (Phase 9)
 
 | Method & path | Permission | Notes |
@@ -201,5 +218,5 @@ Authentication: `Authorization: Bearer <access_token>`. `401` responses include
 ## Planned resources
 
 
-`/reports`, `/settings` —
+`/settings` —
 introduced phase by phase (see [ROADMAP.md](ROADMAP.md)).

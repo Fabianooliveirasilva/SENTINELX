@@ -27,6 +27,7 @@ from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.services.ai import CeleryAIDispatcher
 from app.services.email import build_email_sender
 from app.services.health import DatabaseHealthCheck, HealthService, RedisHealthCheck
+from app.services.reports import CeleryReportDispatcher
 from app.services.scan_dispatch import (
     CeleryIntelDispatcher,
     CeleryScanDispatcher,
@@ -101,6 +102,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.scan_dispatcher = CeleryScanDispatcher(producer)
     app.state.intel_dispatcher = CeleryIntelDispatcher(producer)
     app.state.ai_dispatcher = CeleryAIDispatcher(producer)
+    app.state.report_dispatcher = CeleryReportDispatcher(producer)
 
     register_exception_handlers(app)
 

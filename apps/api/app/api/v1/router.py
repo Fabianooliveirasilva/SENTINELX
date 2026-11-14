@@ -14,6 +14,7 @@ from app.api.v1.endpoints import (
     intelligence,
     monitoring,
     projects,
+    reports,
     risk,
     scans,
     users,
@@ -31,4 +32,5 @@ api_router.include_router(risk.router)
 api_router.include_router(intelligence.router)
 api_router.include_router(monitoring.router)
 api_router.include_router(ai.router)
+api_router.include_router(reports.router)
 api_router.include_router(audit_logs.router)
