@@ -95,6 +95,31 @@ class Settings(BaseSettings):
     dns_nameservers: Annotated[list[str], NoDecode] = Field(default_factory=list)
     max_authorization_days: int = Field(default=366, ge=1, le=3660)
 
+    # --- Scans ------------------------------------------------------------------
+    max_concurrent_scans_per_project: int = Field(default=3, ge=1, le=50)
+    max_daily_scans_per_project: int = Field(default=50, ge=1, le=10_000)
+    scan_timeout_seconds: int = Field(default=240, ge=10, le=3000)
+    # ZAP spiders and (optionally) attacks a whole application: it gets its own budget.
+    zap_scan_timeout_seconds: int = Field(default=900, ge=60, le=7200)
+    scan_queue_timeout_seconds: int = Field(default=1800, ge=60, le=24 * 3600)
+
+    def scan_timeout_for(self, scanner: str) -> int:
+        return self.zap_scan_timeout_seconds if scanner == "zap" else self.scan_timeout_seconds
+
+    @property
+    def max_scan_timeout_seconds(self) -> int:
+        return max(self.scan_timeout_seconds, self.zap_scan_timeout_seconds)
+
+    # --- Threat intelligence ------------------------------------------------------
+    intel_enabled: bool = True
+    nvd_api_key: SecretStr | None = None
+    nvd_base_url: str = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+    kev_url: str = (
+        "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+    )
+    intel_product_ttl_hours: int = Field(default=24, ge=1, le=24 * 30)
+    intel_max_products_per_run: int = Field(default=20, ge=1, le=500)
+
     # --- Rate limits (requests per window) --------------------------------------
     rate_limit_login_per_minute: int = Field(default=10, ge=1)
     rate_limit_refresh_per_minute: int = Field(default=60, ge=1)
@@ -158,6 +183,19 @@ class Settings(BaseSettings):
             return [parse_ip(v).compressed for v in values]
         except TargetError as exc:
             raise ValueError("dns_nameservers must be IP addresses") from exc
+
+    @field_validator("nvd_api_key", mode="before")
+    @classmethod
+    def _empty_key_is_none(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator("nvd_base_url", "kev_url")
+    @classmethod
+    def _validate_intel_urls(cls, value: str) -> str:
+        parts = urlsplit(value)
+        if parts.scheme != "https" or not parts.netloc:
+            raise ValueError("intelligence feed URLs must be absolute https URLs")
+        return value
 
     @field_validator("frontend_base_url")
     @classmethod

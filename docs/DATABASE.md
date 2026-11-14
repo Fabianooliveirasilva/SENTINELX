@@ -67,15 +67,22 @@ erDiagram
 | `refresh_tokens` | user_id, token_hash (unique), family_id, expires_at, revoked_at, replaced_by_id, user_agent, ip | Rotation + reuse detection |
 | `assets` | project_id, type, value (normalized), criticality, exposure, status, tags (array), scan_eligible | Unique (project_id, type, value) |
 | `asset_authorizations` | asset_id, authorized_by (name/organization), reference (contract/ticket), scope_definition (jsonb), valid_from, valid_until, active_scanning_allowed, recorded_by | Required before any active scan |
-| `scan_jobs` | project_id, type, profile, status (pending/queued/running/completed/failed/cancelled), requested_by, started_at, finished_at, correlation_id, tool_versions (jsonb), error_code | Persistent job record |
-| `scan_job_assets` | scan_job_id, asset_id, resolved_targets (jsonb) | Exact IPs validated at execution time |
-| `scan_results` | scan_job_id, scanner, raw_output_ref, normalized (jsonb), checksum | Raw output stored as untrusted data |
-| `findings` | project_id, asset_id, fingerprint (unique per project), title, description, source, severity, confidence, status, cvss_vector, cvss_score, first_seen_at, last_seen_at, remediation | Deduplicated by fingerprint |
-| `finding_evidence` | finding_id, scan_result_id, kind, content, collected_at | Immutable |
-| `finding_status_history` | finding_id, from_status, to_status, changed_by, reason | Lifecycle audit |
-| `cves` | cve_id (unique), description, cvss_v3/v4 vectors & scores, cwe_ids, published_at, modified_at, references (jsonb), source, fetched_at | Provenance + timestamps |
-| `cpe_matches` | cve_id, cpe23, version_start/end (incl/excl), vulnerable | Version-range matching |
-| `finding_cves` | finding_id, cve_id, match_confidence, match_method | No CVE asserted from product name alone |
+| `scan_jobs` ✅ | project_id, asset_id, scanner, profile, technique, target, status (check constraint: pending/queued/running/completed/failed/cancelled), requested_by_id, correlation_id, executor_task_id, created/queued/started/finished/cancel_requested_at, error_code, error_message, scope_decision (jsonb), pinned_addresses (array), tool_versions (jsonb), summary (jsonb) | Persistent job record (Phase 4). Pinned addresses are the exact IPs validated at execution time |
+| `scan_results` ✅ | scan_job_id, project_id, kind, key, data (jsonb), attention (array) | Normalized observations (open port, TLS endpoint, DNS record, technology…); untrusted data |
+| `scan_evidence` ✅ | scan_job_id, label, media_type, content (text, ≤ 64 KiB) | Bounded raw tool output (Nmap XML summary, certificates, response headers) |
+| `platform_settings` ✅ | key (PK), value (jsonb), updated_at, updated_by_id | Operational switches, e.g. `scans.halted` (emergency stop) |
+| `findings` ✅ | project_id, asset_id, fingerprint (sha256 of asset + rule + location; unique per project), rule_id, ruleset_version, source, category, title, description, remediation, location, severity, confidence, cwe, references, status (open/acknowledged/false_positive/accepted_risk/resolved), status_reason, first/last_seen_at, resolved_at, last_scan_job_id, last_profile, occurrence_count | Deduplicated; check constraints on severity/confidence/status (Phase 5). CVSS arrives with threat intelligence (Phase 6) |
+| `finding_occurrences` ✅ | finding_id, scan_job_id, observed_at, observation (jsonb snapshot) | Evidence trail per sighting |
+| `finding_status_changes` ✅ | finding_id, from_status, to_status, reason, changed_by_id, changed_by_email, created_at | Lifecycle history (automatic changes have no user) |
+| `cves` ✅ | id (CVE ID, PK), source, description, status, published/last_modified_at, preferred cvss (version, vector, score, severity), cvss31_*, cvss40_*, cwes, references, kev_added_on, kev_due_on, kev_ransomware, fetched_at | Provenance + timestamps (Phase 6) |
+| `cve_matches` ✅ | cve_id, criteria (CPE 2.3), vendor, product, version, update, start/end including/excluding | Only *vulnerable* criteria; indexed by (vendor, product) |
+| `intel_product_syncs` ✅ | (vendor, product) PK, requested_at, synced_at, status, cve_count, error | Product-driven NVD sync state |
+| `intel_sources` ✅ | name PK (e.g. `kev`), synced_at, status, version, records, error | Feed sync state |
+| `software_components` ✅ | project_id, asset_id, source (scanner), name, version, update, raw_version, cpes, location, correlatable, first/last_seen_at, last_scan_job_id | Inventory replaced per asset + scanner on every completed scan |
+
+CVE findings are regular `findings` rows (`rule_id = cve.<CVE-ID>`, `source = intel`,
+`confidence = tentative`); the CVE, CPE criterion and matched range are kept in
+the occurrence snapshot, so no separate `finding_cves` table is needed.
 | `risk_assessments` | finding_id, model_version, original_cvss, score, category, factors (jsonb), explanation, calculated_at | Deterministic & versioned |
 | `security_events` | project_id, type, severity, asset_id, finding_id, payload (jsonb), occurred_at | Timeline; indexed by (project_id, occurred_at) |
 | `audit_logs` | project_id (nullable), actor_id, action, target_type, target_id, ip, user_agent, correlation_id, metadata (jsonb), created_at | Append-only |
@@ -85,11 +92,12 @@ erDiagram
 
 ## Key indexes (planned)
 
-* `findings (project_id, status, severity)` — vulnerability management filters.
-* `findings (project_id, fingerprint)` unique — deduplication across scans.
+* `findings (project_id, status, severity)` ✅ — vulnerability management filters.
+* `findings (project_id, fingerprint)` unique ✅ — deduplication across scans.
 * `security_events (project_id, occurred_at DESC)` — timeline queries.
 * `audit_logs (project_id, created_at DESC)` and `(actor_id, created_at DESC)`.
-* `scan_jobs (project_id, status, created_at DESC)` — active scans widget.
+* `scan_jobs (project_id, status)` and `(project_id, created_at)` ✅ — quotas and listings.
+* `scan_results (project_id, kind)` and `(scan_job_id)` ✅.
 * `refresh_tokens (token_hash)` unique, `(family_id)`.
 
 ## Tenant isolation

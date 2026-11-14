@@ -58,4 +58,40 @@ test("register an asset, authorize it and verify scope decisions", async ({ page
   await page.getByRole("button", { name: /check/i }).click();
   await expect(page.getByTestId("scope-verdict")).toHaveText("Out of scope");
   await expect(page.getByRole("list", { name: "Decision reasons" })).toContainText("technique_not_authorized");
+
+  // Scan configuration only offers scanners the asset is eligible for. No scan is
+  // started here: E2E runs must never send traffic to public hosts.
+  await page.getByRole("navigation", { name: "Project sections" }).getByRole("link", { name: "Scans" }).click();
+  await expect(page.getByText("No scans yet")).toBeVisible();
+  await page.getByRole("button", { name: /new scan/i }).click();
+  dialog = page.getByRole("dialog", { name: "New scan" });
+  await dialog.getByLabel("Asset").selectOption({ label: "93.184.215.14" });
+  const scanner = dialog.getByLabel("Scanner");
+  await expect(scanner.getByRole("option", { name: "nmap (active)" })).toBeAttached();
+  await expect(scanner.getByRole("option", { name: /^dns/ })).toHaveCount(0);
+  await scanner.selectOption("nmap");
+  await expect(dialog.getByLabel("Profile")).toHaveValue("quick");
+  await page.keyboard.press("Escape");
+
+  // Emergency stop blocks new scans until an administrator resumes scanning.
+  await page.getByRole("button", { name: /emergency stop/i }).click();
+  dialog = page.getByRole("dialog", { name: "Emergency stop" });
+  await dialog.getByLabel("Reason").fill("E2E drill");
+  await dialog.getByRole("button", { name: "Stop all scans" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "halted platform-wide" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /new scan/i })).toBeDisabled();
+  await page.getByRole("button", { name: "Resume scanning" }).click();
+  await expect(page.getByRole("button", { name: /new scan/i })).toBeEnabled();
+
+  // Findings start empty for a project that has not been scanned.
+  await page.getByRole("navigation", { name: "Project sections" }).getByRole("link", { name: "Findings" }).click();
+  await expect(page.getByRole("list", { name: "Open findings by severity" })).toBeVisible();
+  await expect(page.getByText("No findings match these filters")).toBeVisible();
+
+  // Software inventory and threat intelligence are reachable.
+  await page.getByRole("navigation", { name: "Project sections" }).getByRole("link", { name: "Software" }).click();
+  await expect(page.getByText("No software observed yet")).toBeVisible();
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Threat Intel" }).click();
+  await expect(page.getByRole("heading", { name: "Threat intelligence" })).toBeVisible();
+  await expect(page.getByText("CVEs stored")).toBeVisible();
 });
