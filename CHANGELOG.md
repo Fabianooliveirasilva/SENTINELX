@@ -6,6 +6,33 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-11-14 — Phase 12: Hardening & release
+
+### Added
+- Multi-factor authentication (TOTP, RFC 6238) with single-use recovery codes:
+  enrolment and removal need the password (removal also a valid code), codes cannot
+  be replayed, secrets are encrypted at rest, wrong codes count towards the account
+  lockout. Two-step login (`POST /auth/mfa/verify`), account UI, administrator reset
+  (`POST /users/{id}/mfa/reset`, signs the user out everywhere). Migration `0011`.
+- Prometheus metrics at `GET /metrics` (request counts and latency by route template,
+  scan jobs by status, queue lengths, build info). Not routed by the reverse proxy;
+  optional bearer token (`SENTINELX_METRICS_TOKEN`).
+- `scripts/ci/check_hardening.py`: static review of docker-compose.yml and the
+  Dockerfiles (capabilities, read-only FS, no-new-privileges, loopback-only ports,
+  egress-network allowlist, internal networks, non-root users, pinned base images),
+  run by `make check` and CI, with regression tests.
+- `scripts/ci/check_release.py` and a tag-triggered release workflow (version
+  consistency, image build, Trivy gate, push to GHCR with provenance and SBOM,
+  GitHub release notes from this changelog).
+- OWASP ZAP baseline scan of the running SentinelX stack in the containers workflow.
+
+### Changed
+- All packages now share one version (0.12.0), checked against this changelog.
+
+### Security
+- The MFA challenge token (`typ: mfa`, 5 minutes) is rejected as an access token; a
+  second factor is verified under a row lock.
+
 ## [0.11.0] — 2026-11-14 — Phase 11: Dashboard & UX
 
 ### Added

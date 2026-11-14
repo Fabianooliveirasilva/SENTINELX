@@ -46,7 +46,7 @@ class Settings(BaseSettings):
 
     environment: Environment = Environment.DEVELOPMENT
     app_name: str = "SentinelX"
-    version: str = "0.1.0"
+    version: str = "0.12.0"
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     log_json: bool = True
@@ -155,6 +155,12 @@ class Settings(BaseSettings):
     # --- Rate limits (requests per window) --------------------------------------
     rate_limit_login_per_minute: int = Field(default=10, ge=1)
     rate_limit_refresh_per_minute: int = Field(default=60, ge=1)
+    # Prometheus endpoint (GET /metrics, never routed by the reverse proxy). With a
+    # token set it also requires "Authorization: Bearer <token>".
+    metrics_enabled: bool = True
+    metrics_token: SecretStr | None = None
+    # MFA code attempts per challenge / account per 5 minutes (the lockout also applies).
+    rate_limit_mfa_per_challenge: int = Field(default=10, ge=1)
     rate_limit_password_reset_per_hour: int = Field(default=5, ge=1)
     rate_limit_register_per_hour: int = Field(default=5, ge=1)
     rate_limit_scope_check_per_minute: int = Field(default=30, ge=1)

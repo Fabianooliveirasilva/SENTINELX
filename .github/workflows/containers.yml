@@ -158,6 +158,43 @@ jobs:
           pnpm exec playwright install --with-deps chromium
           E2E_ADMIN_PASSWORD="$(cat "$RUNNER_TEMP/e2e-admin")" pnpm test:e2e
 
+      # The metrics endpoint is not under /api, so the reverse proxy must never serve it,
+      # while it stays reachable on the internal network.
+      - name: Metrics are internal-only
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/metrics)
+          test "$code" = "404" || { echo "::error::/metrics via Nginx returned $code"; exit 1; }
+          docker compose exec -T worker python -c "
+          import httpx
+          r = httpx.get('http://api:8000/metrics', timeout=10)
+          r.raise_for_status()
+          assert 'sentinelx_http_requests_total' in r.text and 'sentinelx_build_info' in r.text
+          "
+
+      # Baseline (spider + passive rules) against the running SentinelX web app and API,
+      # unauthenticated: it checks headers, cookies and information leaks on the public
+      # surface. FAIL-level alerts fail the job; warnings are reported as annotations and
+      # kept in the artifact. Rules deliberately ignored live in .zap/rules.tsv.
+      - name: ZAP baseline against SentinelX
+        run: |
+          mkdir -p "$RUNNER_TEMP/zap" && chmod 777 "$RUNNER_TEMP/zap"
+          set +e
+          docker run --rm --network host -v "$RUNNER_TEMP/zap:/zap/wrk:rw" -v "$PWD/.zap:/zap/config:ro" \
+            zaproxy/zap-stable:2.17.0 zap-baseline.py -t http://127.0.0.1:8080 \
+            -c /zap/config/rules.tsv -r zap-baseline.html -J zap-baseline.json -m 3
+          rc=$?
+          set -e
+          python3 scripts/ci/annotate_failure.py zap "$RUNNER_TEMP/zap/zap-baseline.json" || true
+          # 0 = clean, 2 = warnings only (annotated), 1 = FAIL alerts, anything else = ZAP error.
+          if [ "$rc" -eq 1 ] || [ "$rc" -gt 2 ]; then exit 1; fi
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: zap-baseline
+          path: ${{ runner.temp }}/zap
+          retention-days: 7
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:

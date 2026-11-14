@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { routes } from "@/app/routes";
-import { jsonResponse, mockFetch, renderRoutes, tokenResponse } from "@/test-utils";
+import { jsonResponse, mockFetch, renderRoutes, requestUrl, tokenResponse } from "@/test-utils";
 
 import { installAuthHandler, logout, refreshSession } from "./api";
 import { safeNextPath } from "./navigation";
@@ -106,6 +106,56 @@ describe("LoginPage", () => {
     await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
     expect(await screen.findByRole("heading", { name: "Audit Logs" })).toBeInTheDocument();
+  });
+});
+
+describe("two-factor sign-in", () => {
+  it("asks for a code after the password and signs in with it", async () => {
+    installAuthHandler();
+    const fetchMock = mockFetch(
+      unauthorized(),
+      jsonResponse({ mfa_required: true, challenge_token: "c".repeat(40), expires_in: 300 }),
+      jsonResponse(tokenResponse()),
+      jsonResponse({ items: [], total: 0, page: 1, page_size: 50 }),
+      jsonResponse([]),
+    );
+    renderRoutes(routes, "/login?next=%2Faudit-logs");
+    await screen.findByRole("heading", { name: "Sign in" });
+    await userEvent.type(screen.getByLabelText("Email"), "admin@example.com");
+    await userEvent.type(screen.getByLabelText("Password"), "correct-password");
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    await screen.findByRole("heading", { name: "Verification code" });
+    expect(sessionStore.getSnapshot().user).toBeNull(); // not signed in yet
+    await userEvent.type(screen.getByLabelText("Code"), "123456");
+    await userEvent.click(screen.getByRole("button", { name: "Verify" }));
+
+    expect(await screen.findByRole("heading", { name: "Audit Logs" })).toBeInTheDocument();
+    const verify = fetchMock.mock.calls.find(([input]) => requestUrl(input).endsWith("/auth/mfa/verify"));
+    expect(JSON.parse(verify?.[1]?.body as string)).toEqual({ challenge_token: "c".repeat(40), code: "123456" });
+  });
+
+  it("shows the error for a wrong code and lets the user start over", async () => {
+    mockFetch(
+      unauthorized(),
+      jsonResponse({ mfa_required: true, challenge_token: "c".repeat(40), expires_in: 300 }),
+      jsonResponse(
+        { error: { code: "not_authenticated", message: "Invalid or expired verification code.", request_id: "r-2" } },
+        { status: 401 },
+      ),
+    );
+    renderRoutes(routes, "/login");
+    await screen.findByRole("heading", { name: "Sign in" });
+    await userEvent.type(screen.getByLabelText("Email"), "a@example.com");
+    await userEvent.type(screen.getByLabelText("Password"), "correct-password");
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await screen.findByRole("heading", { name: "Verification code" });
+    await userEvent.type(screen.getByLabelText("Code"), "000000");
+    await userEvent.click(screen.getByRole("button", { name: "Verify" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Invalid or expired verification code.");
+    await userEvent.click(screen.getByRole("button", { name: "Use a different account" }));
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
   });
 });
 

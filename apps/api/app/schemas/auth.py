@@ -61,6 +61,47 @@ class TokenResponse(BaseModel):
     user: CurrentUser
 
 
+class MfaChallengeResponse(BaseModel):
+    """Password accepted; a second factor is required to finish signing in."""
+
+    mfa_required: Literal[True] = True
+    challenge_token: str
+    expires_in: int
+
+
+class MfaVerifyRequest(_Input):
+    challenge_token: Annotated[str, Field(min_length=16, max_length=2048)]
+    code: Annotated[str, Field(min_length=6, max_length=32)]
+
+
+class MfaStatus(BaseModel):
+    enabled: bool
+    pending_enrollment: bool
+    recovery_codes_remaining: int
+
+
+class MfaEnrollRequest(_Input):
+    password: PasswordInput
+
+
+class MfaEnrollment(BaseModel):
+    secret: str = Field(description="Base32 secret; shown once.")
+    otpauth_uri: str
+
+
+class MfaConfirmRequest(_Input):
+    code: Annotated[str, Field(min_length=6, max_length=8)]
+
+
+class MfaRecoveryCodes(BaseModel):
+    recovery_codes: list[str] = Field(description="Shown once; each works a single time.")
+
+
+class MfaDisableRequest(_Input):
+    password: PasswordInput
+    code: Annotated[str, Field(min_length=6, max_length=32)]
+
+
 class SessionRead(BaseModel):
     id: uuid.UUID = Field(description="Session (refresh token family) identifier.")
     started_at: datetime

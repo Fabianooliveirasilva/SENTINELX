@@ -10,7 +10,7 @@ from app.models.finding import (
     FindingStatusChange,
     ProjectRiskSnapshot,
 )
-from app.models.identity import PasswordResetToken, Permission, RefreshToken, Role, User
+from app.models.identity import PasswordResetToken, Permission, RefreshToken, Role, User, UserMfa
 from app.models.intel import Cve, CveMatch, IntelSource, ProductSync, SoftwareComponent
 from app.models.monitoring import (
     AlertRule,
@@ -57,5 +57,6 @@ __all__ = [
     "SecurityEvent",
     "SoftwareComponent",
     "User",
+    "UserMfa",
     "alert_rule_channels",
 ]

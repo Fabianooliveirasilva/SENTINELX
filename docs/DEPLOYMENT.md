@@ -85,14 +85,47 @@ secret manager (Docker/Kubernetes secrets, Vault, cloud KMS) instead of a file.
 * Redis receives its password on the command line, which is visible to processes
   inside its container; use a mounted ACL/config file in production.
 
+## Operations (Phase 12)
+
+* **Metrics.** `GET /metrics` on the API (Prometheus format). Nginx never serves it;
+  add a Prometheus container to the `backend` network and scrape `api:8000`
+  (`api` is already in `SENTINELX_ALLOWED_HOSTS`). Set `SENTINELX_METRICS_TOKEN` to
+  also require a bearer token, or `SENTINELX_METRICS_ENABLED=false` to remove it.
+  Worker liveness is visible through `sentinelx_queue_length` and
+  `sentinelx_scan_jobs`; the workers themselves do not export metrics yet.
+* **Container hardening review.** `make hardening` (also in CI and the release) checks
+  every compose service for `no-new-privileges`, `cap_drop: ALL`, a read-only root
+  FS, no `cap_add`/privileged/host namespaces/Docker socket, loopback-only published
+  ports, the egress-network allowlist, internal `backend` and `zap-net` networks,
+  non-root final `USER` and pinned base images. **Documented exceptions:** `postgres`
+  and `redis` (stock images start as root, chown their data directory and drop
+  privileges themselves; they keep a writable FS and default capabilities). They sit
+  on the internal `backend` network only. Trying `cap_drop: ALL` with the minimal
+  `cap_add` set (`CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETGID`, `SETUID`) needs a Docker
+  host and is left as a follow-up.
+* **Dynamic scan of SentinelX.** The containers workflow runs the ZAP baseline
+  (spider + passive rules, unauthenticated) against the running stack; FAIL-level
+  alerts fail the job, warnings are annotated and kept in the `zap-baseline`
+  artifact. Rule levels live in `.zap/rules.tsv`.
+* **Release.** Tag `vX.Y.Z` on `main` after adding the changelog entry and bumping
+  every version (`python scripts/ci/check_release.py vX.Y.Z` verifies). The release
+  workflow verifies, builds each image, fails on fixable CRITICAL findings, pushes
+  `ghcr.io/<owner>/sentinelx-{api,scanner,web}:<version>` and `latest` with
+  provenance and an SBOM, then creates the GitHub release from the changelog.
+* **Runbook.** *Lost MFA device:* an administrator resets it in Users & Roles (or
+  `POST /users/{id}/mfa/reset`). *Rotating `SECRET_KEY`:* invalidates sessions,
+  encrypted webhook secrets and MFA secrets (users must re-enrol MFA; reset them
+  first). *Emergency stop for scans:* see SCANNING_POLICY.md.
+
 ## CI/CD
 
 | Workflow | Trigger | Jobs |
 |----------|---------|------|
 | `ci.yml` | PRs, pushes to `main` | backend lint & types, backend tests (coverage), integration (PostgreSQL + Redis services, migrations up/down/check), frontend lint/types/tests/build, security (Gitleaks, Bandit, pip-audit, Semgrep, pnpm audit) |
-| `containers.yml` | pushes to `main`, PRs touching infrastructure/lockfiles | build images, Trivy scan, compose up (`--wait`), readiness via Nginx, worker task round trip, Playwright E2E |
+| `containers.yml` | pushes to `main`, PRs touching infrastructure/lockfiles | build images, Trivy scan, compose up (`--wait`), readiness via Nginx, worker task round trip, metrics isolation, ZAP baseline, Playwright E2E |
+| `release.yml` | tags `vX.Y.Z` | verify tag/versions/hardening, build, Trivy gate, push to GHCR (provenance + SBOM), GitHub release |
 | Dependabot | weekly | GitHub Actions, uv, npm, Docker base images |
 
 All third-party actions are pinned to full commit SHAs, workflows default to
 `contents: read`, and checkout does not persist credentials. A release workflow
-(tagging, release notes, image publishing) is planned for Phase 12.
+(tagging, release notes, image publishing) is described above.

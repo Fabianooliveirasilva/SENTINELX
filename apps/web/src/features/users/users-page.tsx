@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LogOut, Search, Users } from "lucide-react";
+import { LogOut, Search, ShieldOff, Users } from "lucide-react";
 import { useState } from "react";
 
 import { EmptyState } from "@/components/shared/empty-state";
@@ -16,7 +16,7 @@ import { ROLE_LABELS, ROLES, type Role } from "@/features/auth/schemas";
 import { useCan, useSession } from "@/features/auth/use-auth";
 import { formatDateTime } from "@/lib/format";
 
-import { listRoles, listUsers, revokeUserSessions, updateUser, usersKeys, type User } from "./api";
+import { listRoles, listUsers, resetUserMfa, revokeUserSessions, updateUser, usersKeys, type User } from "./api";
 import { CreateUserDialog } from "./create-user-dialog";
 
 function UserRow({ user, canManage, isSelf }: { user: User; canManage: boolean; isSelf: boolean }) {
@@ -27,6 +27,7 @@ function UserRow({ user, canManage, isSelf }: { user: User; canManage: boolean; 
     onSuccess: invalidate,
   });
   const revoke = useMutation({ mutationFn: () => revokeUserSessions(user.id) });
+  const resetMfa = useMutation({ mutationFn: () => resetUserMfa(user.id) });
 
   return (
     <TR>
@@ -92,6 +93,21 @@ function UserRow({ user, canManage, isSelf }: { user: User; canManage: boolean; 
             >
               <LogOut aria-hidden="true" />
               {revoke.isSuccess ? "Signed out" : null}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={resetMfa.isPending}
+              onClick={() => {
+                if (window.confirm(`Remove two-factor authentication for ${user.email}? They will be signed out everywhere.`)) {
+                  resetMfa.mutate();
+                }
+              }}
+              aria-label={`Reset two-factor authentication for ${user.email}`}
+              title="Reset two-factor authentication"
+            >
+              <ShieldOff aria-hidden="true" />
+              {resetMfa.isSuccess ? "MFA reset" : null}
             </Button>
           </div>
         ) : null}

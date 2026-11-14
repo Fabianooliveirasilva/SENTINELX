@@ -28,7 +28,10 @@ The threat analysis behind these controls is in [THREAT_MODEL.md](THREAT_MODEL.m
 | Production e-mail backend (SMTP with STARTTLS/TLS and verified certificates) | Implemented | `app/services/email.py` |
 | Alert webhooks: SSRF-safe delivery (per-delivery policy check, IP pinning, no redirects), HMAC signatures, encrypted secrets | Implemented | `app/services/notifications.py`, [THREAT_MODEL.md](THREAT_MODEL.md) T28–T29 |
 | Report integrity and injection safety (escaped PDF content, SHA-256, audited downloads) | Implemented | `app/reports/`, [THREAT_MODEL.md](THREAT_MODEL.md) T33 |
-| Multi-factor authentication | Planned | Phase 12 |
+| Multi-factor authentication (TOTP + single-use recovery codes; secrets encrypted at rest; replay-proof; counts towards lockout) | Implemented | [AUTHENTICATION.md](AUTHENTICATION.md), `app/services/mfa.py` |
+| Static container-hardening review in CI (`scripts/ci/check_hardening.py`) | Implemented | [DEPLOYMENT.md](DEPLOYMENT.md) |
+| Release integrity: version/changelog consistency, scanned images, provenance and SBOM | Implemented (CI only) | `.github/workflows/release.yml` |
+| Dynamic scan of the platform itself (ZAP baseline) | Implemented (CI only) | `.github/workflows/containers.yml` |
 | SSRF/scope enforcement, DNS rebinding and redirect defenses | Implemented | [SCANNING_POLICY.md](SCANNING_POLICY.md), `security-engine/` |
 | Scanner sandboxing and egress restriction | Implemented | Phases 4–5 |
 | AI prompt-injection defenses, data minimization (pseudonymization, redaction), output validation, budgets | Implemented | `app/ai/`, [THREAT_MODEL.md](THREAT_MODEL.md) T7, T21, T22, T32 |

@@ -5,6 +5,7 @@ Usage:
   annotate_failure.py containers          # status + log tail of every container
   annotate_failure.py trivy <report.json> # fixable CRITICAL findings of a Trivy report
   annotate_failure.py file <title> <path>  # tail of a text file (e.g. captured command output)
+  annotate_failure.py zap <report.json>    # alerts of a ZAP baseline report (as warnings)
 
 Uses the plain Docker CLI (not compose) so it works even when the compose project
 failed to start. Log lines are already redacted by the services' logging pipeline.
@@ -16,17 +17,18 @@ import json
 import subprocess  # nosec B404 - fixed argument vectors, CI diagnostics only
 import sys
 from pathlib import Path
+from typing import Any
 
 MAX_CHARS = 3500
 
 
-def annotate(title: str, message: str) -> None:
+def annotate(title: str, message: str, level: str = "error") -> None:
     text = message[-MAX_CHARS:].replace("%", "%25").replace("\r", "").replace("\n", "%0A")
     # Property values must also escape ':' and ',' or GitHub drops the annotation.
     safe_title = (
         title.replace("%", "%25").replace(":", "%3A").replace(",", "%2C").replace("\n", " ")
     )
-    print(f"::error title={safe_title}::{text}")
+    print(f"::{level} title={safe_title}::{text}")
 
 
 def containers() -> None:
@@ -76,10 +78,37 @@ def trivy(path: str) -> None:
         annotate(f"trivy {report.get('ArtifactName')}", "\n".join(sorted(set(rows))))
 
 
+def summarize_zap(report: dict[str, Any]) -> list[str]:
+    """One line per alert of risk Low or higher, most severe first."""
+    ranked: list[tuple[int, str, str]] = []
+    for site in report.get("site") or []:
+        for alert in site.get("alerts") or []:
+            risk = int(alert.get("riskcode", 0))
+            if risk >= 1:
+                line = (
+                    f"{alert.get('riskdesc')} | {alert.get('name')} | "
+                    f"{alert.get('count', '?')} instance(s)"
+                )
+                ranked.append((risk, str(alert.get("name")), line))
+    ranked.sort(key=lambda r: (-r[0], r[1]))
+    return [line for _, _, line in ranked]
+
+
+def zap(path: str) -> None:
+    report_path = Path(path)
+    if not report_path.is_file() or not report_path.stat().st_size:
+        return
+    rows = summarize_zap(json.loads(report_path.read_text(encoding="utf-8")))
+    if rows:
+        annotate("zap baseline", "\n".join(rows), level="warning")
+
+
 if __name__ == "__main__":
     if sys.argv[1] == "containers":
         containers()
     elif sys.argv[1] == "file":
         file_tail(sys.argv[2], sys.argv[3])
+    elif sys.argv[1] == "zap":
+        zap(sys.argv[2])
     else:
         trivy(sys.argv[2])

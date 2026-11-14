@@ -55,6 +55,10 @@ export function updateUser(id: string, changes: { role?: Role; is_active?: boole
   return apiRequest(`/users/${id}`, userSchema, { method: "PATCH", body: changes });
 }
 
+export function resetUserMfa(id: string) {
+  return apiRequest(`/users/${id}/mfa/reset`, noContent, { method: "POST" });
+}
+
 export function revokeUserSessions(id: string) {
   return apiRequest(`/users/${id}/revoke-sessions`, noContent, { method: "POST" });
 }

@@ -64,6 +64,7 @@ erDiagram
 | `role_permissions` | role_id, permission_id | Composite PK |
 | `projects` | name, slug (unique), description, owner_id | Tenant boundary |
 | `project_members` | project_id, user_id, role_id | Unique (project_id, user_id); role is per project |
+| `user_mfa` ✅ | user_id (PK, FK), secret_encrypted (Fernet), confirmed_at, last_used_step, recovery_code_hashes (jsonb, SHA-256), created_at | TOTP second factor (Phase 12, migration `0011`); one row per user, unconfirmed until the first valid code |
 | `refresh_tokens` | user_id, token_hash (unique), family_id, expires_at, revoked_at, replaced_by_id, user_agent, ip | Rotation + reuse detection |
 | `assets` | project_id, type, value (normalized), criticality, exposure, status, tags (array), scan_eligible | Unique (project_id, type, value) |
 | `asset_authorizations` | asset_id, authorized_by (name/organization), reference (contract/ticket), scope_definition (jsonb), valid_from, valid_until, active_scanning_allowed, recorded_by | Required before any active scan |
