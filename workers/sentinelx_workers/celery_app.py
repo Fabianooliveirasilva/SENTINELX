@@ -37,6 +37,7 @@ def create_celery_app(settings: Settings) -> Celery:
             "sentinelx_workers.tasks.intel",
             "sentinelx_workers.tasks.risk",
             "sentinelx_workers.tasks.monitoring",
+            "sentinelx_workers.tasks.ai",
         ],
     )
     app.conf.update(

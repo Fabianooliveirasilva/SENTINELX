@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    ai,
     assets,
     audit_logs,
     auth,
@@ -29,4 +30,5 @@ api_router.include_router(findings.router)
 api_router.include_router(risk.router)
 api_router.include_router(intelligence.router)
 api_router.include_router(monitoring.router)
+api_router.include_router(ai.router)
 api_router.include_router(audit_logs.router)

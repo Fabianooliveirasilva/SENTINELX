@@ -90,6 +90,14 @@ def test_monitoring_tasks_are_registered_and_routed() -> None:
     assert schedule["run-scan-schedules"]["options"]["queue"] == "orchestrator"
 
 
+def test_ai_task_is_registered_with_a_bounded_time_limit() -> None:
+    celery_app.loader.import_default_modules()
+    task = celery_app.tasks["sentinelx.ai.analyze"]
+    # Provider timeout x attempts must fit inside the hard limit.
+    assert task.time_limit == 300
+    assert task.soft_time_limit < task.time_limit
+
+
 def test_dispatcher_publishes_a_three_step_chain(monkeypatch: pytest.MonkeyPatch) -> None:
     app = Celery("test", broker="memory://")
     sent: list[dict[str, Any]] = []

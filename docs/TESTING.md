@@ -68,7 +68,29 @@ test (RBAC seed rows are preserved). Redis-dependent behavior in API tests uses
 > Integration tests **truncate** the database they point at. Never run them
 > against a database holding data you want to keep.
 
-## Latest results (Phase 8, local run 2026-11-12)
+## Latest results (Phase 9, local run 2026-11-13)
+
+| Suite | Result |
+|-------|--------|
+| Backend full suite (unit + integration + engine + workers, PostgreSQL 16 local) | 543 passed, 1 skipped (real Nmap binary absent locally); coverage 94% |
+| AI analyst (pseudonymization, redaction, validation, fallback, real SDK request shape, end-to-end jobs, budgets, review) | 12 unit + 10 integration tests |
+| Frontend (Vitest) | 67 passed |
+| E2E (Playwright, Chromium, real API + PostgreSQL + workers) | 10 passed |
+| Live async AI path (API → `ai` queue → worker → deterministic result without a key) | completed, no outbound call |
+| Migration `0009` upgrade → `alembic check` → downgrade → upgrade | clean |
+| Ruff / mypy strict / ESLint strict / tsc / Bandit / pip-audit / pnpm audit | clean |
+| Live call to the Anthropic API | **Not run** (no API key on the development host; billed) |
+| `ai` container, compose, image scans | CI only (no Docker on the development host) |
+
+The provider test drives the official `anthropic` SDK through an HTTP mock
+transport and asserts the request carries structured outputs, the configured
+effort, the refusal fallback beta, a cached system prompt and no tools. The
+integration tests feed a scanner observation containing a prompt-injection string,
+a bearer token and the target IP, and assert that the prompt sent to the provider
+contains the injection only inside an `untrusted` item, the token redacted and the
+IP replaced by a placeholder.
+
+## Phase 8 results (local run 2026-11-12)
 
 | Suite | Result |
 |-------|--------|

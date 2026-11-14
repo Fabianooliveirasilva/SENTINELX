@@ -94,6 +94,21 @@ class Settings(BaseSettings):
     smtp_security: Literal["starttls", "tls"] = "starttls"
     smtp_timeout_seconds: float = Field(default=15.0, gt=0, le=120)
 
+    # --- AI analyst (optional) ------------------------------------------------------
+    # "disabled" keeps every analysis deterministic. The API key is only given to
+    # the `ai` worker container; the API needs just the provider switch.
+    ai_provider: Literal["anthropic", "disabled"] = "disabled"
+    anthropic_api_key: SecretStr | None = None
+    ai_model: str = Field(default="claude-opus-5-5", pattern=r"^[a-z0-9][a-z0-9.\-]{2,63}$")
+    ai_effort: Literal["low", "medium", "high"] = "medium"
+    ai_max_output_tokens: int = Field(default=12_000, ge=1_024, le=64_000)
+    ai_timeout_seconds: float = Field(default=120.0, gt=0, le=240)
+    ai_daily_token_budget_per_project: int = Field(default=300_000, ge=0, le=50_000_000)
+    ai_result_reuse_hours: int = Field(default=24, ge=0, le=720)
+    # USD per million tokens, for cost estimates only (defaults: Claude Opus 5.5).
+    ai_input_price_per_mtok: float = Field(default=4.0, ge=0)
+    ai_output_price_per_mtok: float = Field(default=20.0, ge=0)
+
     # --- Monitoring & notifications ---------------------------------------------
     webhook_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
     notification_max_attempts: int = Field(default=6, ge=1, le=20)

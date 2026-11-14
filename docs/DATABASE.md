@@ -93,7 +93,7 @@ the occurrence snapshot, so no separate `finding_cves` table is needed.
 | `alert_rule_channels` ✅ | rule_id, channel_id | Composite PK; cascades |
 | `scan_schedules` ✅ | project_id, asset_id, scanner, profile, interval_hours (1–2160), enabled, next_run_at, last_run_at, last_status, last_message, last_scan_job_id, owner_id | Runs as its owner through the interactive request path; index (enabled, next_run_at) |
 | `audit_logs` | project_id (nullable), actor_id, action, target_type, target_id, ip, user_agent, correlation_id, metadata (jsonb), created_at | Append-only |
-| `ai_analyses` | project_id, subject_type, subject_id, provider, model, prompt_version, input_hash, output (jsonb), tokens_in/out, cost_estimate, status | AI output stored separately from evidence |
+| `ai_analyses` ✅ | project_id, kind, subject_type, subject_id, parameters (jsonb), status (pending/running/completed/failed), provider (anthropic/deterministic), model, prompt_version, input_hash, context_summary (jsonb: item counts and refs, never content), output (jsonb), warnings (jsonb), fallback_reason, error, input/output_tokens, cost_usd, duration_ms, requested_by_id, reviewed_by_id/email, reviewed_at, correlation_id, created/completed_at | AI output stored separately from evidence (Phase 9); indexes (project_id, created_at), (project_id, subject_id, kind), (input_hash) |
 | `reports` | project_id, format (pdf/json), status, generated_by, file_ref, checksum, parameters (jsonb) | Generated asynchronously |
 | `notifications` ✅ | project_id, event_id, rule_id (nullable for tests), channel_id, status (pending/sent/failed/suppressed), attempts, next_attempt_at, last_error, response_status, sent_at, created_at | Outbox and delivery log (Phase 8); index (status, next_attempt_at) |
 

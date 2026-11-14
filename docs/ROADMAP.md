@@ -15,7 +15,7 @@ documentation and an explicit approval before the next phase starts.
 | 6 | Threat intelligence | NVD sync with rate limits and caching, CVE/CWE/CPE, version-range matching with confidence, provenance | **Delivered** |
 | 7 | Risk engine | Deterministic, versioned, explainable risk model; configurable weights | **Delivered** |
 | 8 | Monitoring & events | Event ingestion, alerts, timeline, filters, notification abstraction (email/webhook ready) | **Delivered** |
-| 9 | AI security analyst | Anthropic provider abstraction, structured outputs, prompt versioning, prompt-injection defenses, budgets, deterministic fallback | Planned |
+| 9 | AI security analyst | Anthropic provider abstraction, structured outputs, prompt versioning, prompt-injection defenses, budgets, deterministic fallback | **Delivered** |
 | 10 | Reporting | PDF + JSON reports with scope, methodology, evidence, tool versions, AI content labeled | Planned |
 | 11 | Dashboard & UX completion | Dashboard on real data, remaining pages, accessibility pass | Planned |
 | 12 | Hardening & release | Metrics/observability, ZAP against SentinelX itself, container hardening review, release workflow, final docs | Planned |
@@ -200,16 +200,41 @@ Alert rules match event type, severity and asset; richer conditions (risk band,
 KEV only, tags) can be expressed through event types today and may be added later.
 Compose, the `notifier` container and its egress network are verified in CI only.
 
-## Phase 9 proposal — AI security analyst
+## Phase 9 — delivered
 
-* Provider abstraction with an Anthropic implementation (official SDK), optional:
-  the platform works unchanged without an API key; deterministic fallbacks.
-* Capabilities: explain a finding, summarize a scan, recommend remediation,
-  executive and technical summaries, compare two scans, suggest investigation steps.
-* Strict data minimization; scanner output, banners and page content passed as
-  clearly delimited untrusted data; no tool execution; structured outputs validated
-  with Pydantic; outputs labeled as AI-generated and tied to the evidence used.
-* Versioned prompts, per-request token/time limits, per-project daily budgets,
-  usage and cost accounting, and an `ai_analyses` table with provenance.
-* UI: "Explain / Recommend" on findings, scan summary, project AI Analyst page;
-  `ai:use` permission enforced server-side.
+| # | Criterion | Verification |
+|---|-----------|--------------|
+| 1 | Five analysis kinds — finding analysis (explanation, impact, remediation, investigation steps), scan summary, scan comparison, executive summary, technical summary — returned as jobs and polled | `test_without_a_provider_analyses_are_deterministic`, `test_scan_comparison`, Vitest `ai.test.tsx` |
+| 2 | Provider abstraction with an Anthropic implementation (official SDK, `claude-opus-5-5`, structured outputs, adaptive thinking at a configured effort, server-side refusal fallback, cached system prompt, no tools) | `test_anthropic_provider_request_shape_and_result` (real SDK against a mock transport) |
+| 3 | Optional: without a provider, over budget, on refusal, timeout, rate limit, truncation, invalid output or a queue outage, a deterministic analysis with the same schema and a recorded reason | `test_provider_failures_fall_back_deterministically`, `test_queue_outage_and_stale_jobs`, `test_daily_token_budget`, `test_anthropic_provider_failures_map_to_safe_reasons` |
+| 4 | Data minimization: asset values, hosts (including any host in a URL), IPv4/IPv6 addresses and e-mail addresses pseudonymized before sending and restored for display; credential-looking values redacted; evidence bounded | `test_pseudonymizer_*`, `test_hosts_inside_urls_*`, `test_untrusted_text_*`, `test_model_output_is_minimized_validated_and_restored` |
+| 5 | Prompt-injection defenses: scanner-derived text delimited and labelled untrusted, versioned system rules, schema-constrained output, no tool execution, output rendered as text | same tests; hostile-banner fixture; Vitest renders `<script>` literally |
+| 6 | Evidence binding: every claim carries a basis (confirmed evidence / scanner hypothesis / external intelligence / AI recommendation) and references; unknown references removed, unsupported bases downgraded, claims naming CVEs outside the assessment data dropped, every correction recorded as a warning | `test_validator_enforces_references_bases_and_known_cves` |
+| 7 | Cost and token controls: per-request output cap, timeout and single retry, per-project daily token budget, identical-request reuse (24 h), token and cost accounting per analysis, usage endpoint | `test_identical_requests_reuse_results_unless_refreshed`, `test_daily_token_budget` |
+| 8 | Isolation and accountability: dedicated `ai` worker on its own queue and egress network, the only container with the API key; `ai:use` to request and review, `findings:read` to read; human review recorded and audited | compose check, `test_permissions_and_project_isolation`, `test_human_review_is_recorded` |
+| 9 | UI: AI panel on finding and scan pages (with scan comparison), project AI analyst page with usage, executive/technical summaries and history; provider, model, prompt version and review state always visible | Vitest `ai.test.tsx`, Playwright `ai.spec.ts` |
+
+**Live verification.** With the real API and Celery worker, an analysis requested
+with the provider switched on but no API key travelled API → `ai` queue → worker
+and completed deterministically (`ai_not_configured`) without any outbound call.
+The Anthropic request itself is verified against the official SDK with a mock
+transport. **No live call to the Anthropic API was made**: the development host
+has no API key, and a live run is billed — it needs the operator's key.
+
+**Limitations.** Hostnames that appear in free text without a URL scheme and are
+not registered assets are not pseudonymized. The budget check is not atomic:
+concurrent requests can overshoot the daily budget by at most one request each.
+The model output is validated for references, bases and CVE identifiers, not for
+the factual accuracy of every sentence; human review remains required.
+
+## Phase 10 proposal — Reporting
+
+* PDF and JSON reports per project (and per scan): executive summary, scope and
+  authorization references, methodology, scan dates and tool versions, assets,
+  findings with evidence and risk, severity distribution, remediation, limitations.
+* AI commentary included only from reviewed analyses and clearly separated and
+  labelled; deterministic content otherwise.
+* Generated asynchronously by a worker, stored with checksum, parameters and
+  provenance (`reports` table); downloads authorized per project and audited.
+* PDF rendering with a pinned, sandboxed HTML-to-PDF engine; untrusted text escaped.
+* UI: report builder, history and download.

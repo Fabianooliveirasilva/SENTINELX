@@ -12,6 +12,7 @@ import {
   ProjectDetailRoute,
   ProjectRiskRoute,
   EventsRoute,
+  AIAnalystRoute,
   AlertsRoute,
   SchedulesRoute,
   ProjectsRoute,
@@ -157,6 +158,14 @@ export const routes: RouteObject[] = [
             element: (
               <RequirePermission permission="events:read">
                 <EventsRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/ai",
+            element: (
+              <RequirePermission permission="findings:read">
+                <AIAnalystRoute />
               </RequirePermission>
             ),
           },

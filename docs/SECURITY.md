@@ -30,7 +30,7 @@ The threat analysis behind these controls is in [THREAT_MODEL.md](THREAT_MODEL.m
 | Multi-factor authentication | Planned | Phase 12 |
 | SSRF/scope enforcement, DNS rebinding and redirect defenses | Implemented | [SCANNING_POLICY.md](SCANNING_POLICY.md), `security-engine/` |
 | Scanner sandboxing and egress restriction | Implemented | Phases 4–5 |
-| AI prompt-injection defenses and data minimization | Planned | Phase 9 |
+| AI prompt-injection defenses, data minimization (pseudonymization, redaction), output validation, budgets | Implemented | `app/ai/`, [THREAT_MODEL.md](THREAT_MODEL.md) T7, T21, T22, T32 |
 
 ## Quality gates (CI)
 

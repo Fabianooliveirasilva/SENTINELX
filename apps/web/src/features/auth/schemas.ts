@@ -64,4 +64,5 @@ export type Permission =
   | "findings:write"
   | "intelligence:read"
   | "events:read"
-  | "alerts:manage";
+  | "alerts:manage"
+  | "ai:use";

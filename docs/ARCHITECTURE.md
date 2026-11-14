@@ -292,11 +292,21 @@ SMTP relays or webhook endpoints hold no scanner duties. Webhook destinations ar
 treated like scan targets: resolved per delivery, policy-checked, pinned.
 **Trade-off:** up to ~30 s delivery latency; acceptable for security alerting.
 
-### ADR-007 — AI is optional, advisory and isolated _(planned, Phase 9)_
+### ADR-007 — AI is optional, advisory and isolated _(implemented, Phase 9)_
 **Decision:** AI features sit behind a provider interface; the platform is fully
 functional without an API key. AI receives minimized, delimited, untrusted-labeled
 inputs, has no tool execution, and every response is schema-validated and stored
 with prompt version, model and token usage.
+
+**Implementation.** `app/ai/` holds the output schema, versioned prompts, the
+context builder (minimization, pseudonymization, redaction, untrusted labels), the
+validator (references, claim bases, CVE identifiers) and the deterministic
+fallback. The API builds the context, reuses identical recent results and checks
+the budget; the `ai` worker — the only container with the API key, on its own
+`ai-egress` network — calls Claude through the official SDK with structured
+outputs and a server-side refusal fallback, then validates and stores the result.
+Any failure produces the deterministic analysis with a recorded reason, so callers
+never see a provider error.
 
 ## 9. Deviations from the master plan
 

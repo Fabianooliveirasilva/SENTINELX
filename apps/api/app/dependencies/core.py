@@ -12,6 +12,7 @@ from app.core.config import Settings
 from app.core.context import RequestMeta
 from app.core.security.passwords import PasswordService
 from app.core.security.tokens import AccessTokenService
+from app.services.ai import AIDispatcher, AIService
 from app.services.assets import AssetService
 from app.services.auth import AuthService
 from app.services.email import EmailSender
@@ -166,3 +167,19 @@ def get_schedule_service(session: SessionDep) -> ScheduleService:
 
 MonitoringServiceDep = Annotated[MonitoringService, Depends(get_monitoring_service)]
 ScheduleServiceDep = Annotated[ScheduleService, Depends(get_schedule_service)]
+
+
+def get_ai_dispatcher(request: Request) -> AIDispatcher:
+    dispatcher: AIDispatcher = request.app.state.ai_dispatcher
+    return dispatcher
+
+
+def get_ai_service(
+    session: SessionDep,
+    settings: SettingsDep,
+    dispatcher: Annotated[AIDispatcher, Depends(get_ai_dispatcher)],
+) -> AIService:
+    return AIService(session, settings, dispatcher)
+
+
+AIServiceDep = Annotated[AIService, Depends(get_ai_service)]

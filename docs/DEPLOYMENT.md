@@ -28,6 +28,7 @@ Open <http://localhost:8080>. API docs (non-production only):
 | `worker` | `sentinelx/api` (Celery command) | — | same as API; `backend` network only (no egress); consumes `celery` + `orchestrator` queues and runs the embedded beat schedule (stale-job expiry, scan schedules, notification delivery, intel and risk jobs) |
 | `scanner-zap` | `sentinelx/scanner` (Celery, `scans.zap` queue, concurrency 1) | — | same as `scanner`; also on `zap-net`; hosts the egress guard ZAP must use (port 8899) |
 | `intel` | `sentinelx/api` (Celery, `intel` queue) | — | same as API; `backend` + `intel-egress`; reaches only the NVD API and the CISA KEV feed |
+| `ai` | `sentinelx/api` (Celery, `ai` queue, concurrency 2) | — | same as API; `backend` + `ai-egress`; the only container holding `SENTINELX_ANTHROPIC_API_KEY`; analyses are deterministic when it is empty |
 | `notifier` | `sentinelx/api` (Celery, `notifications` queue, concurrency 1) | — | same as API; `backend` + `notify-egress`; the only container that reaches SMTP relays and alert webhooks |
 | `zap` | `zaproxy/zap-stable:2.17.0` (daemon) | — | `zap-net` only (internal, no egress); API key; read-only FS with tmpfs home; `cap_drop: ALL`; 2 GiB limit |
 | `scanner` | `sentinelx/scanner` (Celery, `scans` queue) | — | non-root (uid 10002), read-only FS, `cap_drop: ALL`, `no-new-privileges`, CPU/memory/PID limits; **no DB URL or secret key**; `backend` + `scan-egress` networks |
