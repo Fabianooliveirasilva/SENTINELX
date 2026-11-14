@@ -19,6 +19,9 @@ dependencies = [
     "pyjwt>=2.15.1,<3",
     "email-validator>=2.3.0,<3",
     "sentinelx-security",
+    "celery[redis]>=5.7.0,<5.8",
+    "cryptography>=50.0.2,<51",
+    "anthropic>=1,<2",
 ]
 
 [project.scripts]

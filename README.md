@@ -16,7 +16,7 @@ intelligence, prioritize risk with a transparent model, monitor security events,
 and generate evidence-based reports — with an optional AI analyst that explains
 findings and drafts remediation, never inventing evidence.
 
-> **Project status — Phase 3 (Assets & scope enforcement) complete.** The platform skeleton,
+> **Project status — Phase 9 (AI security analyst) complete.** The platform skeleton,
 > infrastructure, quality gates and architecture are in place. Security features
 > are delivered phase by phase; see the [roadmap](docs/ROADMAP.md).
 
@@ -33,12 +33,12 @@ findings and drafts remediation, never inventing evidence.
 | DevSecOps | CI with lint, strict typing, tests, Gitleaks, Bandit, Semgrep, pip-audit, pnpm audit, Trivy, compose E2E | ✅ Phase 1 |
 | Identity | Argon2id, rotating refresh tokens with reuse detection, CSRF, lockout, rate limiting, RBAC (Admin / Analyst / Viewer), project isolation, append-only audit log | ✅ Phase 2 |
 | Assets & scope | Authorized asset inventory, immutable authorization records, deny-by-default scope engine (SSRF, DNS rebinding, IPv4-in-IPv6, redirects) with explained decisions | ✅ Phase 3 |
-| Reconnaissance | DNS, passive subdomains, TLS analysis, Nmap safe profiles in sandboxes | 🗓 Phase 4 |
-| Vulnerabilities | OWASP ZAP baseline, curated Nuclei templates, finding lifecycle & evidence | 🗓 Phase 5 |
-| Threat intel | NVD CVE/CWE/CPE sync and version-range correlation | 🗓 Phase 6 |
-| Risk | Deterministic, explainable, versioned risk engine | 🗓 Phase 7 |
-| Monitoring | Security events, alerts, timeline, audit logs | 🗓 Phase 8 |
-| AI analyst | Anthropic-backed explanations, summaries and remediation (optional) | 🗓 Phase 9 |
+| Reconnaissance | Asynchronous scan jobs; DNS posture, passive CT subdomains, TLS analysis, HTTP fingerprinting, Nmap safe profiles in a credential-free sandbox; quotas and emergency stop | ✅ Phase 4 |
+| Vulnerabilities | OWASP ZAP (isolated daemon) and pinned, curated Nuclei behind a scope-enforcing egress guard; deterministic findings with deduplication, regressions, triage and evidence | ✅ Phase 5 |
+| Threat intel | Product-driven NVD CVE sync, CISA KEV, CPE version-range correlation into tentative CVE findings, software inventory | ✅ Phase 6 |
+| Risk | Deterministic, versioned risk scores (CVSS, confidence, asset context, KEV, EPSS, age) with factor-level explanations, project posture and trend, audited admin weights | ✅ Phase 7 |
+| Monitoring | Security event timeline, alert rules, signed webhooks and e-mail with retries, scheduled scans | ✅ Phase 8 |
+| AI analyst | Optional Claude-backed explanations, scan summaries and comparisons, executive/technical summaries — evidence-labelled, pseudonymized, budgeted, with deterministic fallback and human review | ✅ Phase 9 |
 | Reporting | PDF and JSON reports | 🗓 Phase 10 |
 
 ## Architecture
@@ -122,6 +122,7 @@ See [docs/TESTING.md](docs/TESTING.md) for the strategy and latest results.
 | [SECURITY](docs/SECURITY.md) | Controls and CI quality gates |
 | [THREAT_MODEL](docs/THREAT_MODEL.md) | STRIDE analysis and mitigations |
 | [SCANNING_POLICY](docs/SCANNING_POLICY.md) | What may be scanned, how, and what is prohibited |
+| [RISK_MODEL](docs/RISK_MODEL.md) | Risk formula, factors, weights, posture and governance |
 | [TESTING](docs/TESTING.md) | Test pyramid and commands |
 | [DEPLOYMENT](docs/DEPLOYMENT.md) | Docker strategy, configuration, CI/CD |
 
