@@ -264,10 +264,9 @@ services:
       timeout: 15s
       retries: 5
       start_period: 20s
-    pids_limit: 256
     deploy:
       resources:
-        limits: { cpus: "1.0", memory: 512M }
+        limits: { cpus: "1.0", memory: 512M, pids: 256 }
 
   # OWASP ZAP daemon: no route to the internet or the backend network.
   zap:
@@ -299,10 +298,9 @@ services:
       timeout: 5s
       retries: 20
       start_period: 60s
-    pids_limit: 512
     deploy:
       resources:
-        limits: { cpus: "1.5", memory: 2G }
+        limits: { cpus: "1.5", memory: 2G, pids: 512 }
 
   web:
     <<: *hardening
