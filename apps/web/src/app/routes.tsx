@@ -5,9 +5,18 @@ import {
   AssetDetailRoute,
   AssetsRoute,
   AuditLogsRoute,
+  CveDetailRoute,
+  FindingDetailRoute,
+  FindingsRoute,
+  IntelligenceRoute,
   ProjectDetailRoute,
+  ProjectRiskRoute,
   ProjectsRoute,
+  RiskModelRoute,
+  ScanDetailRoute,
+  ScansRoute,
   ScopeCheckRoute,
+  SoftwareRoute,
   UsersRoute,
 } from "@/app/lazy-pages";
 import { NotFoundPage } from "@/app/not-found-page";
@@ -73,6 +82,78 @@ export const routes: RouteObject[] = [
             element: (
               <RequirePermission permission="assets:read">
                 <ScopeCheckRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/scans",
+            element: (
+              <RequirePermission permission="scans:read">
+                <ScansRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/scans/:scanId",
+            element: (
+              <RequirePermission permission="scans:read">
+                <ScanDetailRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/findings",
+            element: (
+              <RequirePermission permission="findings:read">
+                <FindingsRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/findings/:findingId",
+            element: (
+              <RequirePermission permission="findings:read">
+                <FindingDetailRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/software",
+            element: (
+              <RequirePermission permission="assets:read">
+                <SoftwareRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "intelligence",
+            element: (
+              <RequirePermission permission="intelligence:read">
+                <IntelligenceRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "intelligence/cves/:cveId",
+            element: (
+              <RequirePermission permission="intelligence:read">
+                <CveDetailRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/risk",
+            element: (
+              <RequirePermission permission="findings:read">
+                <ProjectRiskRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "risk-model",
+            element: (
+              <RequirePermission permission="findings:read">
+                <RiskModelRoute />
               </RequirePermission>
             ),
           },

@@ -14,6 +14,29 @@ const AssetDetailPage = lazy(() =>
 const ScopeCheckPage = lazy(() =>
   import("@/features/assets/scope-check-page").then((m) => ({ default: m.ScopeCheckPage })),
 );
+const ScansPage = lazy(() => import("@/features/scans/scans-page").then((m) => ({ default: m.ScansPage })));
+const ScanDetailPage = lazy(() =>
+  import("@/features/scans/scan-detail-page").then((m) => ({ default: m.ScanDetailPage })),
+);
+const FindingsPage = lazy(() =>
+  import("@/features/findings/findings-page").then((m) => ({ default: m.FindingsPage })),
+);
+const FindingDetailPage = lazy(() =>
+  import("@/features/findings/finding-detail-page").then((m) => ({ default: m.FindingDetailPage })),
+);
+const IntelligencePage = lazy(() =>
+  import("@/features/intelligence/intelligence-page").then((m) => ({ default: m.IntelligencePage })),
+);
+const CveDetailPage = lazy(() =>
+  import("@/features/intelligence/cve-detail-page").then((m) => ({ default: m.CveDetailPage })),
+);
+const SoftwarePage = lazy(() =>
+  import("@/features/intelligence/software-page").then((m) => ({ default: m.SoftwarePage })),
+);
+const ProjectRiskPage = lazy(() =>
+  import("@/features/risk/project-risk-page").then((m) => ({ default: m.ProjectRiskPage })),
+);
+const RiskModelPage = lazy(() => import("@/features/risk/risk-model-page").then((m) => ({ default: m.RiskModelPage })));
 const AccountPage = lazy(() => import("@/features/settings/account-page").then((m) => ({ default: m.AccountPage })));
 
 function Loading({ children }: { children: ReactNode }) {
@@ -60,5 +83,50 @@ export const AssetDetailRoute = () => (
 export const ScopeCheckRoute = () => (
   <Loading>
     <ScopeCheckPage />
+  </Loading>
+);
+export const ScansRoute = () => (
+  <Loading>
+    <ScansPage />
+  </Loading>
+);
+export const ScanDetailRoute = () => (
+  <Loading>
+    <ScanDetailPage />
+  </Loading>
+);
+export const FindingsRoute = () => (
+  <Loading>
+    <FindingsPage />
+  </Loading>
+);
+export const FindingDetailRoute = () => (
+  <Loading>
+    <FindingDetailPage />
+  </Loading>
+);
+export const IntelligenceRoute = () => (
+  <Loading>
+    <IntelligencePage />
+  </Loading>
+);
+export const CveDetailRoute = () => (
+  <Loading>
+    <CveDetailPage />
+  </Loading>
+);
+export const SoftwareRoute = () => (
+  <Loading>
+    <SoftwarePage />
+  </Loading>
+);
+export const ProjectRiskRoute = () => (
+  <Loading>
+    <ProjectRiskPage />
+  </Loading>
+);
+export const RiskModelRoute = () => (
+  <Loading>
+    <RiskModelPage />
   </Loading>
 );
