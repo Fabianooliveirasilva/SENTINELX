@@ -94,4 +94,9 @@ test("register an asset, authorize it and verify scope decisions", async ({ page
   await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Threat Intel" }).click();
   await expect(page.getByRole("heading", { name: "Threat intelligence" })).toBeVisible();
   await expect(page.getByText("CVEs stored")).toBeVisible();
+
+  // Risk model (admin can edit) is reachable.
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Risk Model" }).click();
+  await expect(page.getByTestId("risk-formula")).toContainText("CVSS");
+  await expect(page.getByRole("button", { name: "Save and rescore" })).toBeVisible();
 });

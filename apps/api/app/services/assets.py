@@ -31,6 +31,7 @@ from app.repositories.sql import LIKE_ESCAPE, contains_pattern
 from app.schemas.pagination import PageParams
 from app.services.audit import record_audit
 from app.services.projects import ProjectService
+from app.services.risk import rescore, snapshot
 from sentinelx_security.scope import (
     AssetType,
     AuthorizationGrant,
@@ -337,6 +338,9 @@ class AssetService:
                 project_id=project_id,
                 details={"changes": changed},
             )
+        if {"criticality", "exposure"} & set(changed):
+            await rescore(self._session, trigger="asset_updated", asset_id=asset.id)
+            await snapshot(self._session, project_id)
         await self._session.commit()
         return await self.get(principal, project_id, asset.id)
 

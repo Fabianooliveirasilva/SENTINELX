@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
     CheckConstraint,
+    Date,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -98,6 +100,15 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     last_profile: Mapped[str] = mapped_column(String(32))
     occurrence_count: Mapped[int] = mapped_column(Integer, default=1, server_default=text("1"))
+    cve_id: Mapped[str | None] = mapped_column(String(32))
+    risk_score: Mapped[float | None] = mapped_column(Float)
+    risk_band: Mapped[str | None] = mapped_column(String(16))
+    risk_model_version: Mapped[str | None] = mapped_column(String(16))
+    risk_factors: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, default=list, server_default=text("'[]'::jsonb")
+    )
+    risk_explanation: Mapped[str | None] = mapped_column(Text)
+    risk_calculated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     occurrences: Mapped[list[FindingOccurrence]] = relationship(
         lazy="raise",
@@ -117,4 +128,43 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint(_in("status", FINDING_STATUSES), name="status"),
         Index("ix_findings_project_id_status_severity", "project_id", "status", "severity"),
         Index("ix_findings_asset_id", "asset_id"),
+        Index("ix_findings_project_id_risk_score", "project_id", "risk_score"),
+        Index("ix_findings_cve_id", "cve_id"),
     )
+
+
+class FindingRiskChange(UUIDPrimaryKeyMixin, Base):
+    """Score history: a row whenever a finding's risk score or band changes."""
+
+    __tablename__ = "finding_risk_changes"
+
+    finding_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("findings.id", ondelete="CASCADE"))
+    score: Mapped[float] = mapped_column(Float)
+    band: Mapped[str] = mapped_column(String(16))
+    model_version: Mapped[str] = mapped_column(String(16))
+    trigger: Mapped[str] = mapped_column(String(64))
+    factors: Mapped[list[dict[str, Any]]] = mapped_column(JSONB)
+    calculated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=text("now()")
+    )
+
+    __table_args__ = (Index("ix_finding_risk_changes_finding_id", "finding_id", "calculated_at"),)
+
+
+class ProjectRiskSnapshot(UUIDPrimaryKeyMixin, Base):
+    """Daily project posture, used for the risk trend."""
+
+    __tablename__ = "project_risk_snapshots"
+
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    day: Mapped[date] = mapped_column(Date)
+    score: Mapped[float] = mapped_column(Float)
+    band: Mapped[str] = mapped_column(String(16))
+    active: Mapped[int] = mapped_column(Integer)
+    counts: Mapped[dict[str, int]] = mapped_column(JSONB)
+    model_version: Mapped[str] = mapped_column(String(16))
+    calculated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=text("now()")
+    )
+
+    __table_args__ = (UniqueConstraint("project_id", "day"),)

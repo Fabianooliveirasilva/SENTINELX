@@ -33,6 +33,10 @@ const CveDetailPage = lazy(() =>
 const SoftwarePage = lazy(() =>
   import("@/features/intelligence/software-page").then((m) => ({ default: m.SoftwarePage })),
 );
+const ProjectRiskPage = lazy(() =>
+  import("@/features/risk/project-risk-page").then((m) => ({ default: m.ProjectRiskPage })),
+);
+const RiskModelPage = lazy(() => import("@/features/risk/risk-model-page").then((m) => ({ default: m.RiskModelPage })));
 const AccountPage = lazy(() => import("@/features/settings/account-page").then((m) => ({ default: m.AccountPage })));
 
 function Loading({ children }: { children: ReactNode }) {
@@ -114,5 +118,15 @@ export const CveDetailRoute = () => (
 export const SoftwareRoute = () => (
   <Loading>
     <SoftwarePage />
+  </Loading>
+);
+export const ProjectRiskRoute = () => (
+  <Loading>
+    <ProjectRiskPage />
+  </Loading>
+);
+export const RiskModelRoute = () => (
+  <Loading>
+    <RiskModelPage />
   </Loading>
 );

@@ -42,6 +42,7 @@ from app.services.audit import record_audit
 from app.services.findings import ingest_findings
 from app.services.intel import correlate_asset, record_components
 from app.services.projects import ProjectService
+from app.services.risk import snapshot
 from app.services.scan_dispatch import ScanDispatcher
 from sentinelx_security.scanners import CATALOG, ScannerName, ScanRequest
 from sentinelx_security.scanners.base import ScanError, Scanner
@@ -232,6 +233,7 @@ async def record_outcome(
             "software": len(components),
             "cve_findings": cves.to_dict(),
         }
+        await snapshot(session, job.project_id)
     else:
         job.status = "failed"
         job.error_code = str(outcome.get("error_code") or "scanner_error")[:64]

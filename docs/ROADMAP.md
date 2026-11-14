@@ -13,7 +13,7 @@ documentation and an explicit approval before the next phase starts.
 | 4 | Scan orchestration & reconnaissance | Job model & states, scanner interface (`validate_scope/execute/normalize_results/handle_errors/record_evidence`), sandbox runner, DNS analyzer, passive subdomain discovery, TLS analyzer, Nmap safe profiles, technology fingerprinting | **Delivered** |
 | 5 | Vulnerability assessment | OWASP ZAP baseline (active only with explicit authorization), Nuclei curated/pinned templates, HTTP security checks, findings normalization, evidence, lifecycle states | **Delivered** |
 | 6 | Threat intelligence | NVD sync with rate limits and caching, CVE/CWE/CPE, version-range matching with confidence, provenance | **Delivered** |
-| 7 | Risk engine | Deterministic, versioned, explainable risk model; configurable weights | Planned |
+| 7 | Risk engine | Deterministic, versioned, explainable risk model; configurable weights | **Delivered** |
 | 8 | Monitoring & events | Event ingestion, alerts, timeline, filters, notification abstraction (email/webhook ready) | Planned |
 | 9 | AI security analyst | Anthropic provider abstraction, structured outputs, prompt versioning, prompt-injection defenses, budgets, deterministic fallback | Planned |
 | 10 | Reporting | PDF + JSON reports with scope, methodology, evidence, tool versions, AI content labeled | Planned |
@@ -31,7 +31,7 @@ documentation and an explicit approval before the next phase starts.
 | Functional OWASP ZAP integration | 5 ✅ |
 | Controlled Nuclei integration | 5 ✅ |
 | CVE lookup and correlation | 6 ✅ |
-| Functional risk engine | 7 |
+| Functional risk engine | 7 ✅ |
 | Monitoring and event history | 8 |
 | Anthropic API integration | 9 |
 | PDF and JSON reports | 10 |
@@ -151,14 +151,33 @@ products are inventoried but not correlated); configurations combining an
 application with a required platform (`AND` nodes) are evaluated on the
 vulnerable application criterion only.
 
-## Phase 7 proposal — Risk engine
+## Phase 7 — delivered
 
-* Deterministic, versioned risk model (`risk_model_version`) computing a 0–100
-  score per finding from: base severity/CVSS, confidence, CISA KEV, EPSS (FIRST
-  API, optional), asset criticality and exposure, finding age, and evidence type.
-* Every score stored with its factor breakdown and a plain-language explanation;
-  re-scored when inputs change; history kept.
-* Configurable weights per platform (admin), with validation and audit.
-* Project risk posture: aggregated score, top risks, trend over time.
-* UI: risk column and sort on findings, factor breakdown on finding detail,
-  project risk overview.
+| # | Criterion | Verification |
+|---|-----------|--------------|
+| 1 | Deterministic, versioned model: CVSS/severity base, confidence, asset criticality and exposure, KEV, EPSS, exposure window; factor contributions sum to the score | `security-engine/tests/test_risk.py` |
+| 2 | Scores and explanations stored on findings; history row only on real changes; rescoring on scan, correlation, asset context, intel (KEV/EPSS) and daily | `test_findings_are_scored_and_sorted_by_risk`, `test_asset_context_changes_rescore`, `test_cve_findings_use_cvss_kev_and_epss`, `test_daily_rescoring_adds_the_exposure_window` |
+| 3 | Admin-configurable, bounded, audited weights with immediate rescoring and reset | `test_weights_are_admin_only_validated_audited_and_rescore`, `test_weights_validation` |
+| 4 | Project posture (never below the worst issue, robust to noise), top risks, daily snapshots and 30-day trend; suppression lowers posture immediately | `test_bands_and_posture`, `test_project_posture_top_risks_and_trend` |
+| 5 | FIRST EPSS client (batched, defensive) and daily sync for CVEs in active findings | `test_epss_*`, live smoke |
+| 6 | UI: risk column, sort and band filter on findings; factor breakdown and score history on finding detail; project Risk tab; Risk Model page (read-only for non-admins) | Vitest `risk.test.tsx`, `findings.test.tsx`, Playwright |
+
+**Live verification.** On the Phase 6 lab project (Apache 2.4.49, WordPress 6.4.2)
+the intel worker fetched live EPSS scores for 93 CVEs and the daily task rescored
+105 findings; KEV-listed CVEs with high EPSS ranked first, each with a factor
+breakdown such as *"Critical risk (100/100): starts at 91 from CVSS 9.1; known
+exploited +20.0, confidence −18.2, exploit prediction +15.0."*
+
+## Phase 8 proposal — Monitoring & events
+
+* `security_events` timeline per project: new/reopened/resolved findings, risk
+  band changes, new KEV listings for observed software, certificate expiry
+  approaching, scan failures and scope denials, emergency stops.
+* Alert rules (per project): conditions on event type, risk band, KEV, asset;
+  de-duplication and quiet periods.
+* Notification abstraction with e-mail and signed webhooks (HMAC, retries with
+  backoff, delivery log); secrets stored encrypted.
+* Scheduled scans (cron-like, per asset/scanner/profile) honouring authorization
+  windows, quotas and the emergency stop.
+* UI: project timeline with filters, alert rules, notification channels, scan
+  schedules.

@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-11-12 — Phase 7: Risk engine
+
+### Added
+- `sentinelx_security.risk`: deterministic, versioned (1.0.0) risk model —
+  CVSS/severity base x confidence x asset criticality x exposure, plus CISA KEV,
+  EPSS and exposure-window points; factor breakdown and plain-language explanation;
+  bounded, validated weights; project posture that never drops below the worst issue.
+- FIRST EPSS client and daily sync for CVEs referenced by active findings.
+- Risk columns on findings, `finding_risk_changes` history, daily
+  `project_risk_snapshots`, EPSS columns on CVEs (migration 0007, with `cve_id`
+  backfill).
+- Rescoring on scan, correlation, asset criticality/exposure edits, KEV/EPSS
+  updates, weight changes and a daily task.
+- API: risk model and admin weights (audited, rescoring), project risk posture;
+  findings sortable/filterable by risk. UI: risk column and sort, factor
+  breakdown and history, project Risk tab with trend, Risk Model page.
+- `docs/RISK_MODEL.md`.
+
 ## [0.6.0] — 2026-11-12 — Phase 6: Threat intelligence
 
 ### Added

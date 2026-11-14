@@ -23,7 +23,7 @@ import {
   STATUS_LABELS,
   type FindingFilters,
 } from "./api";
-import { SeverityBadge } from "./severity";
+import { RiskScore, SeverityBadge } from "./severity";
 
 function SeveritySummary({ projectId }: { projectId: string }) {
   const summary = useQuery({ queryKey: findingsKeys.summary(projectId), queryFn: () => findingsSummary(projectId) });
@@ -42,7 +42,14 @@ function SeveritySummary({ projectId }: { projectId: string }) {
 
 export function FindingsPage() {
   const { projectId = "" } = useParams();
-  const [filters, setFilters] = useState<FindingFilters>({ page: 1, status: "active", severity: "", search: "" });
+  const [filters, setFilters] = useState<FindingFilters>({
+    page: 1,
+    status: "active",
+    severity: "",
+    riskBand: "",
+    sort: "risk",
+    search: "",
+  });
   const findings = useQuery({
     queryKey: findingsKeys.list(projectId, filters),
     queryFn: () => listFindings(projectId, filters),
@@ -91,6 +98,33 @@ export function FindingsPage() {
               ))}
             </Select>
             <Select
+              aria-label="Filter by risk"
+              className="sm:w-36"
+              value={filters.riskBand}
+              onChange={(e) => {
+                update({ riskBand: e.target.value as FindingFilters["riskBand"] });
+              }}
+            >
+              <option value="">Any risk</option>
+              {SEVERITIES.map((s) => (
+                <option key={s} value={s}>
+                  {s} risk
+                </option>
+              ))}
+            </Select>
+            <Select
+              aria-label="Sort by"
+              className="sm:w-36"
+              value={filters.sort}
+              onChange={(e) => {
+                update({ sort: e.target.value as FindingFilters["sort"] });
+              }}
+            >
+              <option value="risk">Risk</option>
+              <option value="severity">Severity</option>
+              <option value="last_seen">Last seen</option>
+            </Select>
+            <Select
               aria-label="Filter by severity"
               className="sm:w-40"
               value={filters.severity}
@@ -122,6 +156,7 @@ export function FindingsPage() {
               <Table aria-label="Findings">
                 <THead>
                   <tr>
+                    <TH>Risk</TH>
                     <TH>Severity</TH>
                     <TH>Finding</TH>
                     <TH>Status</TH>
@@ -131,6 +166,9 @@ export function FindingsPage() {
                 <TBody>
                   {findings.data.items.map((f) => (
                     <TR key={f.id}>
+                      <TD>
+                        <RiskScore score={f.risk_score} band={f.risk_band} />
+                      </TD>
                       <TD>
                         <SeverityBadge severity={f.severity} />
                       </TD>

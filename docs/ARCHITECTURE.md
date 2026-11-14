@@ -255,6 +255,17 @@ database small.
 administrator can queue any `vendor:product` explicitly. CVE findings are always
 `tentative`: banners can be wrong and distributions backport fixes.
 
+### ADR-010 — Deterministic, explainable risk scoring _(Phase 7)_
+**Decision:** risk is a transparent formula (CVSS or severity base, multiplied by
+confidence and asset context, plus KEV, EPSS and age points), versioned in code,
+with admin-tunable bounded weights; every score stores its factor breakdown and a
+plain-language explanation. Details in [RISK_MODEL.md](RISK_MODEL.md).
+**Rationale:** analysts and auditors must be able to reproduce and challenge a
+ranking. A learned model would be harder to validate, drift silently and could not
+explain itself.
+**Trade-off:** the formula is coarse by design; environment-specific mitigations
+are captured through triage and asset context rather than hidden adjustments.
+
 ### ADR-007 — AI is optional, advisory and isolated _(planned, Phase 9)_
 **Decision:** AI features sit behind a provider interface; the platform is fully
 functional without an API key. AI receives minimized, delimited, untrusted-labeled

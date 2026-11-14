@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.db.session import create_engine, create_session_factory
-from app.models import ScanJob, SoftwareComponent
+from app.models import Cve, Finding, ScanJob, SoftwareComponent
 from app.services.intel import (
     apply_kev,
     mark_product,
@@ -32,6 +32,8 @@ from app.services.intel import (
     stale_products,
     upsert_cves,
 )
+from app.services.risk import rescore, snapshot_all
+from sentinelx_security.intel.epss import EPSS_URL, EpssScore, fetch_epss
 from sentinelx_security.intel.nvd import CveRecord, IntelError, NvdClient
 from sentinelx_workers.celery_app import celery_app
 
@@ -39,6 +41,7 @@ INTEL_QUEUE = "intel"
 ENRICH_TASK = "sentinelx.intel.enrich"
 REFRESH_TASK = "sentinelx.intel.refresh_products"
 KEV_TASK = "sentinelx.intel.sync_kev"
+EPSS_TASK = "sentinelx.intel.sync_epss"
 MAX_CVES_PER_PRODUCT = 5000
 
 logger = get_logger(__name__)
@@ -159,9 +162,68 @@ def sync_kev() -> int:
             await session.commit()
             return 0
         flagged = await apply_kev(session, catalog)
+        await rescore(session, trigger="intel_updated", cve_ids=list(catalog.entries))
+        await snapshot_all(session)
         await session.commit()
         return flagged
 
     flagged = asyncio.run(_run_db(work))
     logger.info("intel_kev_synced", flagged=flagged)
     return flagged
+
+
+async def apply_epss(session: AsyncSession, scores: dict[str, EpssScore]) -> int:
+    rows = (
+        (await session.execute(select(Cve).where(Cve.id.in_(list(scores))))).scalars().all()
+        if scores
+        else []
+    )
+    for cve in rows:
+        entry = scores[cve.id]
+        cve.epss_score = entry.probability
+        cve.epss_percentile = entry.percentile
+        cve.epss_scored_on = entry.scored_on
+    await session.flush()
+    return len(rows)
+
+
+async def sync_epss_for_findings(
+    session: AsyncSession, fetch: Any = fetch_epss, url: str = EPSS_URL
+) -> int:
+    """EPSS for every CVE referenced by an open or acknowledged finding."""
+    cve_ids = (
+        (
+            await session.execute(
+                select(Finding.cve_id)
+                .where(Finding.cve_id.is_not(None), Finding.status.in_(("open", "acknowledged")))
+                .distinct()
+            )
+        )
+        .scalars()
+        .all()
+    )
+    ids = [c for c in cve_ids if c]
+    if not ids:
+        return 0
+    try:
+        scores = await fetch(ids, url=url)
+    except IntelError as exc:
+        await set_source(session, "epss", status="error", error=exc.message)
+        await session.commit()
+        return 0
+    updated = await apply_epss(session, scores)
+    await set_source(session, "epss", status="ok", records=updated)
+    await rescore(session, trigger="intel_updated", cve_ids=ids)
+    await snapshot_all(session)
+    await session.commit()
+    return updated
+
+
+@celery_app.task(name=EPSS_TASK, ignore_result=True, shared=False)  # type: ignore[untyped-decorator]
+def sync_epss() -> int:
+    settings = get_settings()
+    if not settings.intel_enabled:
+        return 0
+    updated = asyncio.run(_run_db(lambda s: sync_epss_for_findings(s, url=settings.epss_url)))
+    logger.info("intel_epss_synced", updated=updated)
+    return updated

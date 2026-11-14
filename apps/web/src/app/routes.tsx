@@ -10,7 +10,9 @@ import {
   FindingsRoute,
   IntelligenceRoute,
   ProjectDetailRoute,
+  ProjectRiskRoute,
   ProjectsRoute,
+  RiskModelRoute,
   ScanDetailRoute,
   ScansRoute,
   ScopeCheckRoute,
@@ -136,6 +138,22 @@ export const routes: RouteObject[] = [
             element: (
               <RequirePermission permission="intelligence:read">
                 <CveDetailRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "projects/:projectId/risk",
+            element: (
+              <RequirePermission permission="findings:read">
+                <ProjectRiskRoute />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "risk-model",
+            element: (
+              <RequirePermission permission="findings:read">
+                <RiskModelRoute />
               </RequirePermission>
             ),
           },

@@ -29,6 +29,9 @@ const finding = {
   resolved_at: null,
   occurrence_count: 2,
   last_scan_job_id: "00000000-0000-4000-8000-0000000000b1",
+  cve_id: null,
+  risk_score: 74.2,
+  risk_band: "high",
 };
 const detail = {
   ...finding,
@@ -36,6 +39,19 @@ const detail = {
   remediation: "Encode output.",
   references: ["https://owasp.org/xss"],
   ruleset_version: "2026.11.1",
+  risk_factors: [
+    { name: "base", value: "severity high", effect: "base", points: 80, reason: "No CVSS score." },
+    { name: "confidence", value: "firm", effect: "x 1", points: 0, reason: "How certain." },
+    { name: "asset_exposure", value: "internal", effect: "x 0.75", points: -20, reason: "Not internet facing." },
+    { name: "exposure_window", value: "40 days open", effect: "+ 3", points: 3, reason: "Long-lived." },
+  ],
+  risk_explanation: "High risk (74.2/100): starts at 80 from severity high.",
+  risk_model_version: "1.0.0",
+  risk_calculated_at: "2026-11-11T10:00:00Z",
+  risk_history: [
+    { score: 74.2, band: "high", model_version: "1.0.0", trigger: "asset_updated", calculated_at: "2026-11-11T10:00:00Z" },
+    { score: 63, band: "high", model_version: "1.0.0", trigger: "scan", calculated_at: "2026-11-10T10:00:00Z" },
+  ],
   occurrences: [
     {
       id: "00000000-0000-4000-8000-0000000000d1",
@@ -75,6 +91,8 @@ describe("FindingsPage", () => {
     expect(counts).toHaveTextContent("high1");
     const listCall = fetchMock.mock.calls.map(([input]) => requestUrl(input)).find((u) => u.includes("/findings?"));
     expect(listCall).toContain("active=true");
+    expect(listCall).toContain("sort=risk");
+    expect(within(table).getByLabelText("Risk 74.2 (high)")).toBeInTheDocument();
 
     await userEvent.selectOptions(screen.getByLabelText("Filter by severity"), "high");
     const urls = fetchMock.mock.calls.map(([input]) => requestUrl(input));
@@ -91,6 +109,11 @@ describe("FindingDetailPage", () => {
     expect(await screen.findByRole("heading", { name: "Cross Site Scripting (Reflected)" })).toBeInTheDocument();
     expect(screen.getByText("<script>alert('desc')</script>")).toBeInTheDocument();
     expect(screen.getByText("CWE-79")).toBeInTheDocument();
+    const factors = screen.getByRole("table", { name: "Risk factors" });
+    expect(factors).toHaveTextContent("asset exposure");
+    expect(factors).toHaveTextContent("-20.0");
+    expect(screen.getByLabelText("Risk 74.2 (high)")).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Risk history" })).toHaveTextContent("after asset updated");
     expect(screen.getByRole("list", { name: "Status history" })).toHaveTextContent("Open by SentinelX");
     expect(container.querySelector("script, img")).toBeNull();
     expect(screen.queryByRole("button", { name: "Change status" })).not.toBeInTheDocument();

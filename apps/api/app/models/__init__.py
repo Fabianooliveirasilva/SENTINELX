@@ -2,7 +2,13 @@
 
 from app.models.asset import Asset, AssetAuthorization
 from app.models.audit import AuditLog
-from app.models.finding import Finding, FindingOccurrence, FindingStatusChange
+from app.models.finding import (
+    Finding,
+    FindingOccurrence,
+    FindingRiskChange,
+    FindingStatusChange,
+    ProjectRiskSnapshot,
+)
 from app.models.identity import PasswordResetToken, Permission, RefreshToken, Role, User
 from app.models.intel import Cve, CveMatch, IntelSource, ProductSync, SoftwareComponent
 from app.models.platform import PlatformSetting
@@ -17,6 +23,7 @@ __all__ = [
     "CveMatch",
     "Finding",
     "FindingOccurrence",
+    "FindingRiskChange",
     "FindingStatusChange",
     "IntelSource",
     "PasswordResetToken",
@@ -25,6 +32,7 @@ __all__ = [
     "ProductSync",
     "Project",
     "ProjectMember",
+    "ProjectRiskSnapshot",
     "RefreshToken",
     "Role",
     "ScanEvidence",

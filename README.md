@@ -16,7 +16,7 @@ intelligence, prioritize risk with a transparent model, monitor security events,
 and generate evidence-based reports — with an optional AI analyst that explains
 findings and drafts remediation, never inventing evidence.
 
-> **Project status — Phase 6 (Threat intelligence) complete.** The platform skeleton,
+> **Project status — Phase 7 (Risk engine) complete.** The platform skeleton,
 > infrastructure, quality gates and architecture are in place. Security features
 > are delivered phase by phase; see the [roadmap](docs/ROADMAP.md).
 
@@ -36,7 +36,7 @@ findings and drafts remediation, never inventing evidence.
 | Reconnaissance | Asynchronous scan jobs; DNS posture, passive CT subdomains, TLS analysis, HTTP fingerprinting, Nmap safe profiles in a credential-free sandbox; quotas and emergency stop | ✅ Phase 4 |
 | Vulnerabilities | OWASP ZAP (isolated daemon) and pinned, curated Nuclei behind a scope-enforcing egress guard; deterministic findings with deduplication, regressions, triage and evidence | ✅ Phase 5 |
 | Threat intel | Product-driven NVD CVE sync, CISA KEV, CPE version-range correlation into tentative CVE findings, software inventory | ✅ Phase 6 |
-| Risk | Deterministic, explainable, versioned risk engine | 🗓 Phase 7 |
+| Risk | Deterministic, versioned risk scores (CVSS, confidence, asset context, KEV, EPSS, age) with factor-level explanations, project posture and trend, audited admin weights | ✅ Phase 7 |
 | Monitoring | Security events, alerts, timeline, audit logs | 🗓 Phase 8 |
 | AI analyst | Anthropic-backed explanations, summaries and remediation (optional) | 🗓 Phase 9 |
 | Reporting | PDF and JSON reports | 🗓 Phase 10 |
@@ -122,6 +122,7 @@ See [docs/TESTING.md](docs/TESTING.md) for the strategy and latest results.
 | [SECURITY](docs/SECURITY.md) | Controls and CI quality gates |
 | [THREAT_MODEL](docs/THREAT_MODEL.md) | STRIDE analysis and mitigations |
 | [SCANNING_POLICY](docs/SCANNING_POLICY.md) | What may be scanned, how, and what is prohibited |
+| [RISK_MODEL](docs/RISK_MODEL.md) | Risk formula, factors, weights, posture and governance |
 | [TESTING](docs/TESTING.md) | Test pyramid and commands |
 | [DEPLOYMENT](docs/DEPLOYMENT.md) | Docker strategy, configuration, CI/CD |
 

@@ -35,6 +35,7 @@ def create_celery_app(settings: Settings) -> Celery:
             "sentinelx_workers.tasks.system",
             "sentinelx_workers.tasks.scans",
             "sentinelx_workers.tasks.intel",
+            "sentinelx_workers.tasks.risk",
         ],
     )
     app.conf.update(
@@ -62,6 +63,16 @@ def create_celery_app(settings: Settings) -> Celery:
             "refresh-intel-products": {
                 "task": "sentinelx.intel.refresh_products",
                 "schedule": 6 * 3600.0,
+                "options": {"queue": "intel"},
+            },
+            "risk-daily": {
+                "task": "sentinelx.risk.daily",
+                "schedule": 24 * 3600.0,
+                "options": {"queue": ORCHESTRATOR_QUEUE},
+            },
+            "sync-epss": {
+                "task": "sentinelx.intel.sync_epss",
+                "schedule": 24 * 3600.0,
                 "options": {"queue": "intel"},
             },
             "sync-kev": {

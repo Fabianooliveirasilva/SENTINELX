@@ -34,6 +34,9 @@ export const findingSchema = z.object({
   resolved_at: z.string().nullable(),
   occurrence_count: z.number().int(),
   last_scan_job_id: z.string().nullable(),
+  cve_id: z.string().nullable(),
+  risk_score: z.number().nullable(),
+  risk_band: z.enum(SEVERITIES).nullable(),
 });
 export type Finding = z.infer<typeof findingSchema>;
 
@@ -42,6 +45,21 @@ export const findingDetailSchema = findingSchema.extend({
   remediation: z.string(),
   references: z.array(z.string()),
   ruleset_version: z.string(),
+  risk_factors: z.array(
+    z.object({ name: z.string(), value: z.string(), effect: z.string(), points: z.number(), reason: z.string() }),
+  ),
+  risk_explanation: z.string().nullable(),
+  risk_model_version: z.string().nullable(),
+  risk_calculated_at: z.string().nullable(),
+  risk_history: z.array(
+    z.object({
+      score: z.number(),
+      band: z.enum(SEVERITIES),
+      model_version: z.string(),
+      trigger: z.string(),
+      calculated_at: z.string(),
+    }),
+  ),
   occurrences: z.array(
     z.object({
       id: z.uuid(),
@@ -72,6 +90,8 @@ export interface FindingFilters {
   page: number;
   status: FindingStatus | "" | "active";
   severity: Severity | "";
+  riskBand: Severity | "";
+  sort: "risk" | "severity" | "last_seen";
   search: string;
 }
 
@@ -92,6 +112,8 @@ export function listFindings(projectId: string, filters: FindingFilters) {
       status: filters.status === "active" ? "" : filters.status,
       active: filters.status === "active" ? "true" : "",
       severity: filters.severity,
+      risk_band: filters.riskBand,
+      sort: filters.sort,
       search: filters.search,
     },
   });
