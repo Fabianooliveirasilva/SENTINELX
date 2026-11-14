@@ -18,9 +18,11 @@ from fastapi import APIRouter, Cookie, Header, Response, status
 
 from app.core.config import Settings
 from app.core.errors import NotFoundError
+from app.core.security.tokens import hash_opaque_token
 from app.dependencies.auth import CurrentPrincipal
 from app.dependencies.core import (
     AuthServiceDep,
+    MfaServiceDep,
     RateLimiterDep,
     RequestMetaDep,
     SettingsDep,
@@ -30,6 +32,14 @@ from app.schemas.auth import (
     CurrentUser,
     LoginRequest,
     MessageResponse,
+    MfaChallengeResponse,
+    MfaConfirmRequest,
+    MfaDisableRequest,
+    MfaEnrollment,
+    MfaEnrollRequest,
+    MfaRecoveryCodes,
+    MfaStatus,
+    MfaVerifyRequest,
     PasswordResetConfirm,
     PasswordResetRequest,
     RegisterRequest,
@@ -38,7 +48,7 @@ from app.schemas.auth import (
 )
 from app.schemas.common import error_responses
 from app.schemas.users import UserRead
-from app.services.auth import SessionTokens, principal_from_user, utcnow
+from app.services.auth import MfaChallenge, SessionTokens, principal_from_user, utcnow
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -109,7 +119,7 @@ async def login(
     limiter: RateLimiterDep,
     meta: RequestMetaDep,
     settings: SettingsDep,
-) -> TokenResponse:
+) -> TokenResponse | MfaChallengeResponse:
     limit = settings.rate_limit_login_per_minute
     await limiter.enforce(
         "login:ip", meta.ip_address or "unknown", limit=limit, window_seconds=_MINUTE
@@ -117,9 +127,112 @@ async def login(
     await limiter.enforce(
         "login:account", payload.email.lower(), limit=limit, window_seconds=_MINUTE
     )
-    tokens = await auth.login(payload.email, payload.password, meta)
+    result = await auth.login(payload.email, payload.password, meta)
+    if isinstance(result, MfaChallenge):
+        return MfaChallengeResponse(challenge_token=result.token, expires_in=result.expires_in)
+    _set_session_cookies(response, result, settings)
+    return _token_response(result)
+
+
+@router.post(
+    "/mfa/verify",
+    responses=_ERRORS,
+    summary="Finish signing in with a TOTP or recovery code",
+)
+async def verify_mfa(
+    payload: MfaVerifyRequest,
+    response: Response,
+    auth: AuthServiceDep,
+    mfa: MfaServiceDep,
+    limiter: RateLimiterDep,
+    meta: RequestMetaDep,
+    settings: SettingsDep,
+) -> TokenResponse:
+    limit = settings.rate_limit_login_per_minute
+    await limiter.enforce(
+        "mfa:ip", meta.ip_address or "unknown", limit=limit, window_seconds=_MINUTE
+    )
+    # The challenge token is the account identity here; bucket on its digest so a
+    # stolen challenge cannot be guessed against without limit.
+    await limiter.enforce(
+        "mfa:challenge",
+        hash_opaque_token(payload.challenge_token),
+        limit=settings.rate_limit_mfa_per_challenge,
+        window_seconds=_MINUTE * 5,
+    )
+    tokens = await auth.verify_mfa(payload.challenge_token, payload.code, mfa, meta)
     _set_session_cookies(response, tokens, settings)
     return _token_response(tokens)
+
+
+@router.get("/mfa", responses=_ERRORS, summary="Multi-factor authentication status")
+async def mfa_status(principal: CurrentPrincipal, mfa: MfaServiceDep) -> MfaStatus:
+    enabled, pending, remaining = await mfa.status(principal)
+    return MfaStatus(
+        enabled=enabled, pending_enrollment=pending, recovery_codes_remaining=remaining
+    )
+
+
+@router.post("/mfa/enroll", responses=_ERRORS, summary="Start TOTP enrolment (needs the password)")
+async def mfa_enroll(
+    payload: MfaEnrollRequest,
+    principal: CurrentPrincipal,
+    mfa: MfaServiceDep,
+    limiter: RateLimiterDep,
+    meta: RequestMetaDep,
+    settings: SettingsDep,
+) -> MfaEnrollment:
+    await limiter.enforce(
+        "mfa:enroll",
+        str(principal.user_id),
+        limit=settings.rate_limit_mfa_per_challenge,
+        window_seconds=_MINUTE * 5,
+    )
+    secret, uri = await mfa.enroll(principal, payload.password, meta)
+    return MfaEnrollment(secret=secret, otpauth_uri=uri)
+
+
+@router.post(
+    "/mfa/confirm", responses=_ERRORS, summary="Confirm enrolment; returns recovery codes once"
+)
+async def mfa_confirm(
+    payload: MfaConfirmRequest,
+    principal: CurrentPrincipal,
+    mfa: MfaServiceDep,
+    limiter: RateLimiterDep,
+    meta: RequestMetaDep,
+    settings: SettingsDep,
+) -> MfaRecoveryCodes:
+    await limiter.enforce(
+        "mfa:confirm",
+        str(principal.user_id),
+        limit=settings.rate_limit_mfa_per_challenge,
+        window_seconds=_MINUTE * 5,
+    )
+    return MfaRecoveryCodes(recovery_codes=await mfa.confirm(principal, payload.code, meta))
+
+
+@router.post(
+    "/mfa/disable",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=_ERRORS,
+    summary="Turn MFA off (needs the password and a valid code)",
+)
+async def mfa_disable(
+    payload: MfaDisableRequest,
+    principal: CurrentPrincipal,
+    mfa: MfaServiceDep,
+    limiter: RateLimiterDep,
+    meta: RequestMetaDep,
+    settings: SettingsDep,
+) -> None:
+    await limiter.enforce(
+        "mfa:disable",
+        str(principal.user_id),
+        limit=settings.rate_limit_mfa_per_challenge,
+        window_seconds=_MINUTE * 5,
+    )
+    await mfa.disable(principal, payload.password, payload.code, meta)
 
 
 @router.post("/refresh", responses=_ERRORS, summary="Rotate the refresh token")

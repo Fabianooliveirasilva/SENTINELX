@@ -18,7 +18,7 @@ documentation and an explicit approval before the next phase starts.
 | 9 | AI security analyst | Anthropic provider abstraction, structured outputs, prompt versioning, prompt-injection defenses, budgets, deterministic fallback | **Delivered** |
 | 10 | Reporting | PDF + JSON reports with scope, methodology, evidence, tool versions, AI content labeled | **Delivered** |
 | 11 | Dashboard & UX completion | Dashboard on real data, remaining pages, accessibility pass | **Delivered** |
-| 12 | Hardening & release | Metrics/observability, ZAP against SentinelX itself, container hardening review, release workflow, final docs | Planned |
+| 12 | Hardening & release | Metrics/observability, ZAP against SentinelX itself, container hardening review, release workflow, final docs (+ TOTP MFA) | **Delivered** (CI-only parts unverified locally) |
 
 ## Mapping to the project success checklist
 
@@ -270,3 +270,23 @@ screen-reader pass, which was not done. Pages behind per-project routes
 (asset detail, scan detail, reports, AI, monitoring) were not part of the axe
 route list beyond what the E2E specs exercise. The dark theme is the only
 visual theme (the light-mode run uses the same palette).
+
+## Phase 12 — delivered
+
+| # | Criterion | Verification |
+|---|-----------|--------------|
+| 1 | TOTP multi-factor authentication: enrolment (password), confirmation, recovery codes, two-step login, replay and brute-force protection, encrypted secret, disable (password + code), administrator reset | `test_mfa.py` (7 integration), `test_totp.py` (RFC 6238 vectors, 14 unit), Vitest `auth.test.tsx` / `mfa.test.tsx`, Playwright `mfa.spec.ts` (real TOTP) |
+| 2 | Prometheus metrics with bounded labels, optional token, not published by Nginx | `test_metrics.py`, `test_metrics` unit; CI step "Metrics are internal-only" **(CI only)** |
+| 3 | Container hardening review enforced automatically | `check_hardening.py` + `test_hardening_check.py` (each rule proven to fire); `make hardening` |
+| 4 | ZAP against SentinelX itself | `containers.yml` ZAP baseline + `.zap/rules.tsv` **(CI only, never run locally)** |
+| 5 | Release workflow and version consistency | `check_release.py` + `test_release_check.py`; `release.yml` **(CI only, never run)** |
+| 6 | Final docs: SECURITY, AUTHENTICATION, DATABASE, API, THREAT_MODEL (T34–T37), ARCHITECTURE (ADR-012), DEPLOYMENT (operations + runbook), CHANGELOG, README | this change |
+
+**Limitations.** The ZAP baseline is unauthenticated, so it covers the login page,
+static assets and public API surface, not authenticated API calls; its first CI run
+may need rule tuning. `release.yml` and the new compose/Nginx steps were validated
+only as YAML and by unit tests of their helper scripts. `postgres` and `redis` keep
+the default capability set and a writable root FS (documented exception). Workers do
+not export metrics. MFA is optional per user, has no QR code and no WebAuthn.
+Nothing in this phase makes the platform safe to expose to the internet without a
+TLS-terminating proxy in front (see the threat model's assumptions).

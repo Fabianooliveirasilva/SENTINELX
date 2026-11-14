@@ -1,6 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Monitor } from "lucide-react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -12,7 +13,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { changePassword, listSessions, revokeSession } from "@/features/auth/api";
+import {
+  changePassword,
+  confirmMfa,
+  disableMfa,
+  getMfaStatus,
+  listSessions,
+  mfaKeys,
+  revokeSession,
+  startMfaEnrollment,
+} from "@/features/auth/api";
 import { newPasswordSchema, ROLE_LABELS } from "@/features/auth/schemas";
 import { sessionStore } from "@/features/auth/session-store";
 import { useSession } from "@/features/auth/use-auth";
@@ -26,6 +36,167 @@ const passwordSchema = z
   })
   .refine((v) => v.next === v.confirm, { message: "Passwords do not match.", path: ["confirm"] });
 type PasswordValues = z.infer<typeof passwordSchema>;
+
+function MfaCard() {
+  const queryClient = useQueryClient();
+  const status = useQuery({ queryKey: mfaKeys.status, queryFn: getMfaStatus });
+  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [enrollment, setEnrollment] = useState<{ secret: string; otpauth_uri: string } | null>(null);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
+  const refresh = () => queryClient.invalidateQueries({ queryKey: mfaKeys.status });
+
+  const start = useMutation({
+    mutationFn: () => startMfaEnrollment(password),
+    onSuccess: (data) => {
+      setEnrollment(data);
+      setPassword("");
+    },
+  });
+  const confirm = useMutation({
+    mutationFn: () => confirmMfa(code),
+    onSuccess: async (data) => {
+      setRecoveryCodes(data.recovery_codes);
+      setEnrollment(null);
+      setCode("");
+      await refresh();
+    },
+  });
+  const disable = useMutation({
+    mutationFn: () => disableMfa(password, code),
+    onSuccess: async () => {
+      setPassword("");
+      setCode("");
+      await refresh();
+    },
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Two-factor authentication</CardTitle>
+        <CardDescription>Require a code from an authenticator app (TOTP) in addition to your password.</CardDescription>
+      </CardHeader>
+      <CardContent className="max-w-md space-y-4">
+        {status.isPending ? <Skeleton className="h-10 w-full" /> : null}
+        {status.isError ? <ErrorAlert error={status.error} /> : null}
+        {recoveryCodes ? (
+          <div role="status" className="space-y-2 rounded-md border border-border p-3">
+            <p className="text-sm font-medium">Save your recovery codes</p>
+            <p className="text-xs text-muted-foreground">
+              Each code works once if you lose your device. They are not shown again.
+            </p>
+            <ul aria-label="Recovery codes" className="grid grid-cols-2 gap-1 font-mono text-sm">
+              {recoveryCodes.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setRecoveryCodes(null);
+              }}
+            >
+              I saved them
+            </Button>
+          </div>
+        ) : null}
+        {status.data && !status.data.enabled && !enrollment ? (
+          <form
+            className="space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              start.mutate();
+            }}
+          >
+            {start.isError ? <ErrorAlert error={start.error} /> : null}
+            <FormField label="Current password">
+              <Input
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                }}
+              />
+            </FormField>
+            <Button type="submit" disabled={start.isPending || password === ""}>
+              Set up two-factor authentication
+            </Button>
+          </form>
+        ) : null}
+        {enrollment ? (
+          <form
+            className="space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              confirm.mutate();
+            }}
+          >
+            <p className="text-sm">
+              Add this key to your authenticator app, then enter the 6-digit code it shows.
+            </p>
+            <p className="font-mono text-sm break-all" aria-label="Setup key">
+              {enrollment.secret}
+            </p>
+            <p className="text-xs break-all text-muted-foreground">{enrollment.otpauth_uri}</p>
+            {confirm.isError ? <ErrorAlert error={confirm.error} /> : null}
+            <FormField label="Verification code">
+              <Input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={code}
+                onChange={(e) => {
+                  setCode(e.target.value);
+                }}
+              />
+            </FormField>
+            <Button type="submit" disabled={confirm.isPending || code.trim().length < 6}>
+              Turn on
+            </Button>
+          </form>
+        ) : null}
+        {status.data?.enabled ? (
+          <form
+            className="space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              disable.mutate();
+            }}
+          >
+            <p className="text-sm">
+              <Badge>Enabled</Badge> {status.data.recovery_codes_remaining} recovery codes left.
+            </p>
+            {disable.isError ? <ErrorAlert error={disable.error} /> : null}
+            <FormField label="Current password">
+              <Input
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                }}
+              />
+            </FormField>
+            <FormField label="Code or recovery code">
+              <Input
+                autoComplete="one-time-code"
+                value={code}
+                onChange={(e) => {
+                  setCode(e.target.value);
+                }}
+              />
+            </FormField>
+            <Button type="submit" variant="outline" disabled={disable.isPending || password === "" || code.trim().length < 6}>
+              Turn off
+            </Button>
+          </form>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
 
 function ChangePasswordCard() {
   const form = useForm<PasswordValues>({
@@ -155,6 +326,7 @@ export function AccountPage() {
           </dl>
         </CardContent>
       </Card>
+      <MfaCard />
       <ChangePasswordCard />
       <SessionsCard />
     </div>

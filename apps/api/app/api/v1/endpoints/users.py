@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, status
 from app.core.context import Principal
 from app.core.permissions import Permission, RoleName
 from app.dependencies.auth import require_permission
-from app.dependencies.core import RequestMetaDep, SessionDep, UserServiceDep
+from app.dependencies.core import MfaServiceDep, RequestMetaDep, SessionDep, UserServiceDep
 from app.repositories.users import UserRepository, UserSort
 from app.schemas.common import error_responses
 from app.schemas.pagination import Page, PageParams, page_params
@@ -98,6 +98,24 @@ async def revoke_user_sessions(
     user_id: uuid.UUID, actor: CanManageUsers, users: UserServiceDep, meta: RequestMetaDep
 ) -> None:
     await users.revoke_sessions(actor, user_id, meta)
+
+
+@router.post(
+    "/users/{user_id}/mfa/reset",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=_ERRORS,
+    summary="Remove the user's second factor (lost device) and sign them out everywhere",
+)
+async def reset_user_mfa(
+    user_id: uuid.UUID,
+    actor: CanManageUsers,
+    users: UserServiceDep,
+    mfa: MfaServiceDep,
+    meta: RequestMetaDep,
+) -> None:
+    user = await users.get(user_id)
+    await mfa.admin_reset(actor, user, meta)
+    await users.revoke_sessions(actor, user_id, meta)  # commits both changes
 
 
 @router.get("/roles", responses=_ERRORS, summary="Roles and their permissions")

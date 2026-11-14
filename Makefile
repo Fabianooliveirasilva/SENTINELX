@@ -22,7 +22,7 @@ install: ## Install backend (uv) and frontend (pnpm) dependencies
 	cd $(WEB) && $(PNPM) install --frozen-lockfile
 
 # --------------------------------------------------------------------------- quality
-.PHONY: lint format typecheck test test-integration test-e2e check security
+.PHONY: lint format typecheck test test-integration test-e2e check security hardening
 lint: ## Lint backend and frontend
 	$(UV) run ruff check .
 	$(UV) run ruff format --check .
@@ -55,7 +55,11 @@ security: ## Local security checks (bandit, pip-audit, pnpm audit)
 	$(UV) run pip-audit --strict --disable-pip --require-hashes -r .requirements-audit.txt; rc=$$?; rm -f .requirements-audit.txt; exit $$rc
 	cd $(WEB) && $(PNPM) audit --audit-level high
 
-check: lint typecheck test security ## Everything CI runs without infrastructure
+hardening: ## Static container-hardening and release-consistency review (no Docker needed)
+	$(UV) run python scripts/ci/check_hardening.py
+	$(UV) run python scripts/ci/check_release.py
+
+check: lint typecheck test security hardening ## Everything CI runs without infrastructure
 
 # --------------------------------------------------------------------------- local dev
 .PHONY: dev-api dev-web dev-worker

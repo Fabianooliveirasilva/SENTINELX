@@ -68,3 +68,19 @@ export type Permission =
   | "ai:use"
   | "reports:read"
   | "reports:generate";
+
+export const mfaChallengeSchema = z.object({
+  mfa_required: z.literal(true),
+  challenge_token: z.string(),
+  expires_in: z.number().int(),
+});
+export type MfaChallenge = z.infer<typeof mfaChallengeSchema>;
+export const loginResponseSchema = z.union([mfaChallengeSchema, tokenResponseSchema]);
+
+export const mfaStatusSchema = z.object({
+  enabled: z.boolean(),
+  pending_enrollment: z.boolean(),
+  recovery_codes_remaining: z.number().int(),
+});
+export const mfaEnrollmentSchema = z.object({ secret: z.string(), otpauth_uri: z.string() });
+export const mfaRecoveryCodesSchema = z.object({ recovery_codes: z.array(z.string()) });

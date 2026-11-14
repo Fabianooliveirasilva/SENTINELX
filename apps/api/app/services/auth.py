@@ -29,7 +29,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import NoReturn
+from typing import NoReturn, Protocol
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,7 +54,7 @@ from app.core.security.tokens import (
     hash_opaque_token,
     tokens_match,
 )
-from app.models import PasswordResetToken, RefreshToken, User
+from app.models import PasswordResetToken, RefreshToken, User, UserMfa
 from app.repositories.users import UserRepository, normalize_email
 from app.services.audit import record_audit
 from app.services.email import EmailMessage, EmailSender
@@ -63,6 +63,11 @@ logger = get_logger(__name__)
 
 INVALID_CREDENTIALS = "Invalid email or password."
 SESSION_EXPIRED = "Your session has expired. Please sign in again."
+INVALID_MFA = "Invalid or expired verification code."
+
+
+class MfaChecker(Protocol):
+    async def check_second_factor(self, user_id: uuid.UUID, code: str) -> bool: ...
 
 
 def utcnow() -> datetime:
@@ -76,6 +81,14 @@ class SessionTokens:
     refresh_token: str
     refresh_expires_in: int
     csrf_token: str
+
+
+@dataclass(frozen=True, slots=True)
+class MfaChallenge:
+    """Password accepted but a second factor is still required."""
+
+    token: str
+    expires_in: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,7 +149,9 @@ class AuthService:
 
     # ------------------------------------------------------------------ login
 
-    async def login(self, email: str, password: str, meta: RequestMeta) -> SessionTokens:
+    async def login(
+        self, email: str, password: str, meta: RequestMeta
+    ) -> SessionTokens | MfaChallenge:
         now = utcnow()
         user = await self._users.get_by_email(email, for_update=True)
 
@@ -168,12 +183,26 @@ class AuthService:
         if not user.is_active:
             await self._fail_login(meta, user, reason="inactive_account")
 
-        user.failed_login_count = 0
-        user.locked_until = None
-        user.last_login_at = now
         if result.needs_rehash:
             user.password_hash = await self._passwords.hash(password)
 
+        if await self._has_mfa(user.id):
+            # The failure counter is kept: wrong second factors accumulate towards the lockout.
+            challenge = self._access_tokens.issue_mfa_challenge(user.id, user.token_version)
+            record_audit(
+                self._session,
+                action="auth.login_mfa_challenge",
+                actor=Actor(id=user.id, email=user.email),
+                meta=meta,
+                target_type="user",
+                target_id=user.id,
+            )
+            await self._session.commit()
+            return MfaChallenge(token=challenge.token, expires_in=challenge.expires_in)
+
+        user.failed_login_count = 0
+        user.locked_until = None
+        user.last_login_at = now
         tokens = await self._start_session(user, meta, now)
         record_audit(
             self._session,
@@ -185,6 +214,71 @@ class AuthService:
         )
         await self._session.commit()
         return tokens
+
+    async def _has_mfa(self, user_id: uuid.UUID) -> bool:
+        stmt = select(UserMfa.user_id).where(
+            UserMfa.user_id == user_id, UserMfa.confirmed_at.is_not(None)
+        )
+        return (await self._session.execute(stmt)).first() is not None
+
+    async def verify_mfa(
+        self, challenge_token: str, code: str, mfa: MfaChecker, meta: RequestMeta
+    ) -> SessionTokens:
+        """Second login step: a valid challenge plus a TOTP or recovery code."""
+        now = utcnow()
+        try:
+            claims = self._access_tokens.decode_mfa_challenge(challenge_token)
+        except InvalidTokenError as exc:
+            raise AuthenticationError(INVALID_MFA) from exc
+        user = await self._users.get(claims.user_id, for_update=True)
+        if user is None or not user.is_active or user.token_version != claims.token_version:
+            raise AuthenticationError(INVALID_MFA)
+        if user.locked_until is not None and user.locked_until > now:
+            await self._fail_mfa(meta, user, reason="account_locked")
+        if not await mfa.check_second_factor(user.id, code):
+            user.failed_login_count += 1
+            if user.failed_login_count >= self._settings.login_max_failures:
+                user.locked_until = now + timedelta(seconds=self._settings.login_lockout_seconds)
+                user.failed_login_count = 0
+                record_audit(
+                    self._session,
+                    action="auth.account_locked",
+                    actor=ANONYMOUS,
+                    meta=meta,
+                    target_type="user",
+                    target_id=user.id,
+                    details={"lockout_seconds": self._settings.login_lockout_seconds},
+                )
+            await self._fail_mfa(meta, user, reason="invalid_code")
+        user.failed_login_count = 0
+        user.locked_until = None
+        user.last_login_at = now
+        tokens = await self._start_session(user, meta, now)
+        record_audit(
+            self._session,
+            action="auth.login",
+            actor=Actor(id=user.id, email=user.email),
+            meta=meta,
+            target_type="user",
+            target_id=user.id,
+            details={"mfa": True},
+        )
+        await self._session.commit()
+        return tokens
+
+    async def _fail_mfa(self, meta: RequestMeta, user: User, *, reason: str) -> NoReturn:
+        record_audit(
+            self._session,
+            action="auth.login",
+            outcome="failure",
+            actor=ANONYMOUS,
+            meta=meta,
+            target_type="user",
+            target_id=user.id,
+            details={"reason": reason, "stage": "mfa"},
+        )
+        await self._session.commit()
+        raise AuthenticationError(INVALID_MFA)
 
     async def _fail_login(self, meta: RequestMeta, user: User | None, *, reason: str) -> NoReturn:
         record_audit(

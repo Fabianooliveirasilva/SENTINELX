@@ -1,0 +1,10 @@
+# ZAP baseline rule configuration: <rule id><TAB><IGNORE|WARN|FAIL><TAB>[comment]
+# Passive rules default to WARN. Raise the ones that must never regress to FAIL.
+# Missing/duplicated hardening headers and cookie flags are enforced by Nginx and the API.
+10020	FAIL	(Anti-clickjacking header missing)
+10021	FAIL	(X-Content-Type-Options header missing)
+10038	FAIL	(Content-Security-Policy header not set)
+10054	FAIL	(Cookie without SameSite attribute)
+10010	WARN	(Cookie without HttpOnly: the signed CSRF cookie is script-readable by design, see AUTHENTICATION.md)
+10011	WARN	(Cookie without Secure flag: Secure is set in production, plain http in the CI stack)
+10096	WARN	(Timestamp disclosure)

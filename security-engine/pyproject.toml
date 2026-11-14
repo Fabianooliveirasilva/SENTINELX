@@ -1,6 +1,6 @@
 [project]
 name = "sentinelx-security"
-version = "0.4.0"
+version = "0.12.0"
 description = "SentinelX security engine: scope enforcement and (later) scanner adapters."
 requires-python = ">=3.12,<3.13"
 license = "MIT"

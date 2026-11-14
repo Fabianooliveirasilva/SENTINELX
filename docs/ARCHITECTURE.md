@@ -292,6 +292,16 @@ SMTP relays or webhook endpoints hold no scanner duties. Webhook destinations ar
 treated like scan targets: resolved per delivery, policy-checked, pinned.
 **Trade-off:** up to ~30 s delivery latency; acceptable for security alerting.
 
+### ADR-012 — TOTP MFA without new infrastructure _(Phase 12)_
+
+**Decision:** a standard-library TOTP implementation, a per-user `user_mfa` row, a
+two-step login whose intermediate state is a signed, short-lived, typed JWT, and
+secrets encrypted with a key derived per purpose from `SECRET_KEY`. **Why:** no
+additional service or dependency, nothing stored server-side between the two steps,
+and the challenge cannot be confused with an access token. **Trade-offs:** key
+rotation invalidates enrolled secrets; WebAuthn/passkeys would be a stronger factor
+and fit the same two-step flow.
+
 ### ADR-007 — AI is optional, advisory and isolated _(implemented, Phase 9)_
 **Decision:** AI features sit behind a provider interface; the platform is fully
 functional without an API key. AI receives minimized, delimited, untrusted-labeled

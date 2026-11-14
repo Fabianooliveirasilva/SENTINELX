@@ -47,7 +47,7 @@ Readiness probe; checks PostgreSQL and Redis concurrently with a timeout.
 ```json
 {
   "status": "unavailable",
-  "version": "0.1.0",
+  "version": "0.12.0",
   "components": {
     "database": { "status": "ok", "latency_ms": 1.8, "error": null },
     "redis": { "status": "unavailable", "latency_ms": null, "error": "timeout" }
@@ -214,6 +214,24 @@ they are returned as JSON/text and must be rendered as text.
 Authentication: `Authorization: Bearer <access_token>`. `401` responses include
 `WWW-Authenticate: Bearer`; `429` responses include `Retry-After`. Details in
 [AUTHENTICATION.md](AUTHENTICATION.md).
+
+## Multi-factor authentication and metrics (Phase 12)
+
+| Endpoint | Auth | Notes |
+|---|---|---|
+| `POST /auth/login` | — | Returns `{mfa_required: true, challenge_token, expires_in}` when the account has MFA, otherwise the usual tokens |
+| `POST /auth/mfa/verify` | challenge token | `{challenge_token, code}` (TOTP or recovery code) → tokens + cookies; 401 `Invalid or expired verification code.` otherwise |
+| `GET /auth/mfa` | bearer | `{enabled, pending_enrollment, recovery_codes_remaining}` |
+| `POST /auth/mfa/enroll` | bearer | `{password}` → `{secret, otpauth_uri}`; 409 when already enabled |
+| `POST /auth/mfa/confirm` | bearer | `{code}` → `{recovery_codes}` (shown once) |
+| `POST /auth/mfa/disable` | bearer | `{password, code}` → 204 |
+| `POST /users/{id}/mfa/reset` | `users:manage` | 204; removes the second factor and signs the user out everywhere |
+| `GET /metrics` (not under `/api`) | none, or `Bearer SENTINELX_METRICS_TOKEN` | Prometheus text format; Nginx answers 404, scrape `http://api:8000/metrics` on the internal network |
+
+Metrics: `sentinelx_http_requests_total{method,route,status}`,
+`sentinelx_http_request_duration_seconds{method,route}` (route = template, never a
+concrete path or identifier), `sentinelx_scan_jobs{status}`,
+`sentinelx_queue_length{queue}`, `sentinelx_build_info{version}`.
 
 ## Dashboard (Phase 11)
 

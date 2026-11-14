@@ -4,9 +4,15 @@ import { apiRequest, noContent, readCookie, setAuthHandler } from "@/lib/api-cli
 
 import {
   currentUserSchema,
+  loginResponseSchema,
+  mfaChallengeSchema,
+  mfaEnrollmentSchema,
+  mfaRecoveryCodesSchema,
+  mfaStatusSchema,
   messageSchema,
   sessionSchema,
   tokenResponseSchema,
+  type MfaChallenge,
   type TokenResponse,
 } from "./schemas";
 import { sessionStore } from "./session-store";
@@ -22,15 +28,35 @@ function applyTokens(tokens: TokenResponse): void {
   sessionStore.setSession(tokens.access_token, tokens.user);
 }
 
-export async function login(email: string, password: string): Promise<TokenResponse> {
-  const tokens = await apiRequest("/auth/login", tokenResponseSchema, {
+/** Returns a challenge when a second factor is required; otherwise the session starts. */
+export async function login(email: string, password: string): Promise<TokenResponse | MfaChallenge> {
+  const result = await apiRequest("/auth/login", loginResponseSchema, {
     method: "POST",
     body: { email, password },
+    skipAuthRefresh: true,
+  });
+  if (!mfaChallengeSchema.safeParse(result).success) applyTokens(result as TokenResponse);
+  return result;
+}
+
+export async function verifyMfa(challengeToken: string, code: string): Promise<TokenResponse> {
+  const tokens = await apiRequest("/auth/mfa/verify", tokenResponseSchema, {
+    method: "POST",
+    body: { challenge_token: challengeToken, code },
     skipAuthRefresh: true,
   });
   applyTokens(tokens);
   return tokens;
 }
+
+export const mfaKeys = { status: ["auth", "mfa"] as const };
+export const getMfaStatus = () => apiRequest("/auth/mfa", mfaStatusSchema);
+export const startMfaEnrollment = (password: string) =>
+  apiRequest("/auth/mfa/enroll", mfaEnrollmentSchema, { method: "POST", body: { password } });
+export const confirmMfa = (code: string) =>
+  apiRequest("/auth/mfa/confirm", mfaRecoveryCodesSchema, { method: "POST", body: { code } });
+export const disableMfa = (password: string, code: string) =>
+  apiRequest("/auth/mfa/disable", noContent, { method: "POST", body: { password, code } });
 
 let inflightRefresh: Promise<boolean> | null = null;
 

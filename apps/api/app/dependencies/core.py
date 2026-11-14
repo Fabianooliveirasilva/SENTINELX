@@ -18,6 +18,7 @@ from app.services.auth import AuthService
 from app.services.email import EmailSender
 from app.services.findings import FindingService
 from app.services.intel import IntelService
+from app.services.mfa import MfaService
 from app.services.monitoring import MonitoringService
 from app.services.projects import ProjectService
 from app.services.rate_limit import RateLimiter
@@ -88,6 +89,15 @@ def get_auth_service(
 
 
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
+
+
+def get_mfa_service(
+    session: SessionDep, settings: SettingsDep, passwords: PasswordServiceDep
+) -> MfaService:
+    return MfaService(session, settings, passwords)
+
+
+MfaServiceDep = Annotated[MfaService, Depends(get_mfa_service)]
 
 
 def get_user_service(

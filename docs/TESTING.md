@@ -68,7 +68,21 @@ test (RBAC seed rows are preserved). Redis-dependent behavior in API tests uses
 > Integration tests **truncate** the database they point at. Never run them
 > against a database holding data you want to keep.
 
-## Latest results (Phase 11, local run 2026-11-14)
+## Latest results (Phase 12, local run 2026-11-14)
+
+| Suite | Result |
+|-------|--------|
+| Backend full suite (unit + integration + engine + workers, PostgreSQL 16 local) | 606 passed, 1 skipped (real Nmap binary absent locally); coverage 94.33% |
+| MFA (enrolment, secret encryption, replay, recovery codes, lockout, disable, admin reset) | 7 integration + 14 unit (incl. RFC 6238 vectors) |
+| Metrics (token, bounded labels, disabled switch) | 1 integration + 8 unit |
+| Hardening and release checkers (each rule proven to fire) | 13 + 3 unit; both pass on the repository |
+| Frontend (Vitest) | 82 passed |
+| E2E (Playwright, Chromium, real API + PostgreSQL + orchestrator worker) | 19 passed (incl. real-TOTP enrolment, recovery code, admin reset) |
+| `make check` (Ruff, mypy strict, pytest, Vitest, ESLint strict, tsc, Bandit, pip-audit, pnpm audit, hardening, release) | exit 0 |
+| Migration `0011` upgrade → `alembic check` → downgrade → upgrade | clean |
+| ZAP baseline, `release.yml`, metrics isolation through Nginx, Trivy, image builds | **CI only, not run locally** |
+
+## Phase 11 results (local run 2026-11-14)
 
 | Suite | Result |
 |-------|--------|

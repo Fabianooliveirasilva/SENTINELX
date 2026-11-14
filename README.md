@@ -16,7 +16,7 @@ intelligence, prioritize risk with a transparent model, monitor security events,
 and generate evidence-based reports — with an optional AI analyst that explains
 findings and drafts remediation, never inventing evidence.
 
-> **Project status — Phase 11 (Dashboard & UX) complete.** The platform skeleton,
+> **Project status — Phase 12 (Hardening & release) complete.** The platform skeleton,
 > infrastructure, quality gates and architecture are in place. Security features
 > are delivered phase by phase; see the [roadmap](docs/ROADMAP.md).
 
@@ -40,6 +40,7 @@ findings and drafts remediation, never inventing evidence.
 | Monitoring | Security event timeline, alert rules, signed webhooks and e-mail with retries, scheduled scans | ✅ Phase 8 |
 | AI analyst | Optional Claude-backed explanations, scan summaries and comparisons, executive/technical summaries — evidence-labelled, pseudonymized, budgeted, with deterministic fallback and human review | ✅ Phase 9 |
 | Reporting | PDF and JSON reports (project or scan): scope, authorizations, methodology, findings with evidence and risk, remediation plan, reviewed AI commentary labelled, SHA-256 integrity | ✅ Phase 10 |
+| Operations | TOTP multi-factor authentication, Prometheus metrics, static container-hardening review, tag-driven release with scanned images, ZAP baseline against the platform itself | ✅ Phase 12 |
 
 ## Architecture
 

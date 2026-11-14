@@ -1,6 +1,6 @@
 [project]
 name = "sentinelx"
-version = "0.1.0"
+version = "0.12.0"
 description = "SentinelX workspace root (not a distributable package)."
 requires-python = ">=3.12,<3.13"
 
@@ -27,6 +27,8 @@ dev = [
     "fakeredis>=2.40.0",
     "types-defusedxml>=0.7.0",
     "types-reportlab>=4.4,<5",
+    "types-pyyaml>=6.0.12.20261113",
+    "pyyaml>=6",
 ]
 
 # ---------------------------------------------------------------------------
