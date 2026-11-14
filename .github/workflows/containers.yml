@@ -163,6 +163,7 @@ jobs:
         env:
           E2E_BASE_URL: http://localhost:8080
           E2E_EXPECT_OPERATIONAL: "1"
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ runner.temp }}/playwright.json
           E2E_ADMIN_EMAIL: admin@sentinelx.example.com
         run: |
           pnpm install --frozen-lockfile
@@ -184,6 +185,7 @@ jobs:
           python3 scripts/ci/annotate_failure.py file "images" "$RUNNER_TEMP/images.txt"
           sleep 1
           python3 scripts/ci/annotate_failure.py file "zap check" "$RUNNER_TEMP/zapcheck.log"
+          python3 scripts/ci/annotate_playwright.py "$RUNNER_TEMP/playwright.json" || true
           python3 scripts/ci/annotate_failure.py containers
 
       - name: Compose logs on failure
