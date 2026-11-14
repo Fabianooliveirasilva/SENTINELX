@@ -13,6 +13,7 @@ import {
   ProjectRiskRoute,
   EventsRoute,
   AIAnalystRoute,
+  DashboardRoute,
   ReportsRoute,
   AlertsRoute,
   SchedulesRoute,
@@ -49,7 +50,8 @@ export const routes: RouteObject[] = [
       {
         element: <AppLayout />,
         children: [
-          { index: true, element: <SystemStatusPage /> },
+          { index: true, element: <DashboardRoute /> },
+          { path: "system-status", element: <SystemStatusPage /> },
           {
             path: "projects",
             element: (

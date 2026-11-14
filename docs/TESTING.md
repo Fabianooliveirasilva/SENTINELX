@@ -68,7 +68,19 @@ test (RBAC seed rows are preserved). Redis-dependent behavior in API tests uses
 > Integration tests **truncate** the database they point at. Never run them
 > against a database holding data you want to keep.
 
-## Latest results (Phase 10, local run 2026-11-13)
+## Latest results (Phase 11, local run 2026-11-14)
+
+| Suite | Result |
+|-------|--------|
+| Backend full suite (unit + integration + engine + workers, PostgreSQL 16 local) | 556 passed, 1 skipped (real Nmap binary absent locally); coverage 94.22% |
+| Dashboard API (real aggregation, project filtering and isolation) | 2 integration tests |
+| Frontend (Vitest) | 74 passed |
+| `make check` (Ruff, mypy strict, pytest, Vitest, ESLint strict, tsc, Bandit, pip-audit, pnpm audit) | exit 0 |
+| Migrations | none in this phase (no schema change); `alembic check` unaffected |
+| E2E (Playwright) and `pnpm build` | **Not run in this phase** |
+| Visual/contrast review in a browser, axe audit | **Not run** |
+
+## Phase 10 results (local run 2026-11-13)
 
 | Suite | Result |
 |-------|--------|

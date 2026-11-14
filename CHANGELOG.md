@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-11-14 — Phase 11: Dashboard & UX
+
+### Added
+- `GET /api/v1/dashboard` (`projects:read`): one aggregated, read-only overview of
+  the projects the caller can access, or of a single project (`project_id`):
+  totals, posture score and 30-day trend, risk distribution, assets by exposure,
+  scan activity, remediation progress, recent findings and a project ranking.
+  No schema change.
+- Dashboard UI on real data (Recharts) with a project filter and guidance for
+  users without projects. Every chart has a text alternative and a data table.
+- Skip-to-content link and a focusable `main` landmark in the app layout.
+
+### Changed
+- Dashboard replaces the placeholder home page; severity colours are shared
+  between findings and charts.
+
+### Security
+- Aggregation is restricted to projects the principal can access (memberships; all for administrators); an
+  inaccessible `project_id` returns 404. Scanner-derived titles render as text.
+
 ## [0.10.0] — 2026-11-13 — Phase 10: Reporting
 
 ### Added

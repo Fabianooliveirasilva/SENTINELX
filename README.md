@@ -16,7 +16,7 @@ intelligence, prioritize risk with a transparent model, monitor security events,
 and generate evidence-based reports — with an optional AI analyst that explains
 findings and drafts remediation, never inventing evidence.
 
-> **Project status — Phase 10 (Reporting) complete.** The platform skeleton,
+> **Project status — Phase 11 (Dashboard & UX) complete.** The platform skeleton,
 > infrastructure, quality gates and architecture are in place. Security features
 > are delivered phase by phase; see the [roadmap](docs/ROADMAP.md).
 

@@ -17,7 +17,7 @@ documentation and an explicit approval before the next phase starts.
 | 8 | Monitoring & events | Event ingestion, alerts, timeline, filters, notification abstraction (email/webhook ready) | **Delivered** |
 | 9 | AI security analyst | Anthropic provider abstraction, structured outputs, prompt versioning, prompt-injection defenses, budgets, deterministic fallback | **Delivered** |
 | 10 | Reporting | PDF + JSON reports with scope, methodology, evidence, tool versions, AI content labeled | **Delivered** |
-| 11 | Dashboard & UX completion | Dashboard on real data, remaining pages, accessibility pass | Planned |
+| 11 | Dashboard & UX completion | Dashboard on real data, remaining pages, accessibility pass | **Delivered** (dashboard + baseline a11y; see limitations) |
 | 12 | Hardening & release | Metrics/observability, ZAP against SentinelX itself, container hardening review, release workflow, final docs | Planned |
 
 ## Mapping to the project success checklist
@@ -251,13 +251,19 @@ noted in the report) and two evidence excerpts per finding. Content is stored in
 PostgreSQL (≤ 25 MB per report); there is no retention policy yet. PDFs are not
 digitally signed; integrity relies on the stored SHA-256.
 
-## Phase 11 proposal — Dashboard & UX completion
+## Phase 11 — delivered
 
-* Dashboard on real data: total assets, active scans, critical vulnerabilities,
-  risk distribution, posture score and trend, recent findings, scan activity,
-  asset exposure, remediation progress (Recharts, accessible, light/dark-safe).
-* Remaining pages from the master plan reviewed for completeness (Reconnaissance
-  overview, Vulnerability management across projects, Threat Intelligence,
-  Settings), consistent loading / empty / error states.
-* Accessibility pass (keyboard navigation, focus, contrast, ARIA labels) and
-  responsive layout checks; visual review of every page.
+| # | Criterion | Verification |
+|---|-----------|--------------|
+| 1 | Dashboard on real data: assets, active scans, critical findings, risk distribution, posture score and trend, recent findings, scan activity, asset exposure, remediation progress | `test_dashboard_aggregates_real_data`, Vitest `dashboard.test.tsx` |
+| 2 | Project isolation: only accessible projects are aggregated (all for administrators, memberships otherwise); foreign `project_id` → 404 | `test_dashboard_only_counts_accessible_projects` |
+| 3 | Charts accessible: text alternative and data table for each, no colour-only meaning, loading/empty/error states, untrusted titles rendered as text | `dashboard.test.tsx` |
+| 4 | Keyboard: skip-to-content link, focusable `main` | `AppLayout` (not covered by a dedicated test) |
+
+**Limitations.** The standalone cross-project pages (Reconnaissance overview,
+cross-project Vulnerability management) and a full accessibility audit (axe,
+contrast measurement, visual review at several viewports) were **not** done;
+they remain open. Playwright E2E and `pnpm build` were not run for this phase.
+The dashboard is computed on request (no cache). The posture trend reads the
+existing daily `project_risk_snapshots` and, across several projects, shows the
+highest project score per day; it shows nothing until two daily snapshots exist.

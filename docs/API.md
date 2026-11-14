@@ -215,6 +215,12 @@ Authentication: `Authorization: Bearer <access_token>`. `401` responses include
 `WWW-Authenticate: Bearer`; `429` responses include `Retry-After`. Details in
 [AUTHENTICATION.md](AUTHENTICATION.md).
 
+## Dashboard (Phase 11)
+
+| Endpoint | Permission | Notes |
+|---|---|---|
+| `GET /dashboard?project_id=` | `projects:read` | Read-only aggregate over the projects the caller can access (all, or one). `project_id` of an inaccessible project → 404. Returns totals, posture (score, band, worst project), 30-day posture trend, risk distribution, assets by exposure, 14-day scan activity, 8-week remediation flow, status breakdown, closed ratio, recent findings and a project ranking; `empty: true` when the caller has no projects. |
+
 ## Planned resources
 
 
