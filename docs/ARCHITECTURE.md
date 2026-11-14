@@ -28,9 +28,13 @@ flowchart LR
     api -->|enqueue jobs| redis
     worker[Workers<br/>Celery] --> redis
     worker --> pg
-    worker -.->|planned: isolated sandbox| scanners[Scanner sandboxes<br/>Nmap · ZAP · Nuclei]
-    scanners -.->|scope-restricted egress| targets[(Authorized targets)]
-    worker -.->|planned| nvd[NVD API]
+    redis -->|scans queue| scanner[Scanner sandbox<br/>DNS · CT · TLS · HTTP · Nmap · Nuclei]
+    redis -->|scans.zap queue| scannerzap[ZAP worker<br/>egress guard]
+    zap[ZAP daemon<br/>zap-net only] -->|proxy| scannerzap
+    scannerzap -->|pinned IPs only| targets
+    scanner -->|pinned IPs only, scan-egress network| targets[(Authorized targets)]
+    intel[Intel worker] -->|intel-egress| nvd[NVD API · CISA KEV]
+    intel --> pg
     worker -.->|planned, optional| llm[Anthropic API]
 ```
 
@@ -44,12 +48,15 @@ flowchart LR
 | `migrate` | Alembic | One-shot schema migration before API/worker start | `backend` |
 | `postgres` | PostgreSQL 17 | System of record | `backend` |
 | `redis` | Redis 7.4 | Celery broker/result backend, cache, rate-limit counters | `backend` |
-| scanner sandboxes _(planned)_ | Nmap, OWASP ZAP, Nuclei containers | Execute a single, pre-validated scan profile | dedicated egress network |
+| `intel` | Celery 5 (API image), `intel` queue | NVD and CISA KEV sync, CVE correlation; the only DB-connected container with egress (feeds only) | `backend` + `intel-egress` |
+| `scanner-zap` | Same image, `scans.zap` queue | Drives the ZAP daemon one scan at a time; hosts the egress guard | `backend` + `scan-egress` + `zap-net` |
+| `zap` | OWASP ZAP 2.17 daemon | Spider, passive and (intrusive profile) active rules | `zap-net` only (internal) |
+| `scanner` | Celery 5 + scanner adapters (Nmap, Nuclei) | Re-check scope with fresh DNS, execute one server-defined profile against pinned IPs; no DB access or secrets | `backend` (broker only) + `scan-egress` |
 
 The `backend` network is `internal: true`: PostgreSQL, Redis and workers have no
-route to the internet. Outbound access is granted later only to the components
-that need it (NVD sync, scanner sandboxes), through a dedicated, policy-controlled
-egress network (see [SCANNING_POLICY.md](SCANNING_POLICY.md)).
+route to the internet. Outbound access is granted only to the components that
+need it — today the `scanner` sandbox, through the dedicated `scan-egress`
+network (see [SCANNING_POLICY.md](SCANNING_POLICY.md)); later NVD sync.
 
 ## 4. Repository layout
 
@@ -134,7 +141,43 @@ HTTP (api/v1)  →  services  →  repositories (Phase 2+)  →  SQLAlchemy mode
 Long-running work (scans, enrichment, report generation, AI analysis) is
 submitted as a job and executed by Celery workers. The API immediately returns a
 job identifier; clients poll job state (`pending → queued → running →
-completed | failed | cancelled`) _(job model planned for Phase 4)_.
+completed | failed | cancelled`), which lives in PostgreSQL.
+
+A scan is published by the API as a three-step Celery chain:
+
+```mermaid
+sequenceDiagram
+    participant API
+    participant O as Orchestrator worker (DB)
+    participant S as Scanner sandbox (no DB)
+    API->>API: preflight (eligibility, quotas, emergency stop) → job queued
+    API->>O: publish chain
+    O->>O: start: re-read job, snapshot scope → running
+    O->>S: execute(request)
+    S->>S: scope engine with fresh DNS → pin IPs → run profile
+    S->>O: outcome (decision, observations, evidence)
+    O->>O: record: persist results → completed / failed
+```
+
+Cancelled or halted jobs are skipped by `start`; late results for jobs that are no
+longer `running` are discarded by `record`; a periodic task fails jobs whose
+messages were lost.
+
+### Events and notifications (Phase 8)
+
+Services call `emit()` inside the transaction that changes state, so an event
+exists exactly when the change was committed. `emit()` evaluates the project's
+alert rules and writes `notifications` rows (an outbox) in the same transaction.
+Delivery is decoupled: Celery beat enqueues `sentinelx.monitoring.deliver` every
+30 s on the `notifications` queue, consumed only by the `notifier` worker, the one
+container on the `notify-egress` network. Rows are leased before sending, so two
+notifiers never deliver the same notification twice; failures back off
+exponentially and become `failed` after the configured number of attempts.
+
+Scheduled scans are started by `sentinelx.monitoring.run_schedules` (every 60 s,
+orchestrator queue). Each due schedule is claimed (its next slot written and
+committed) before it runs, then submitted through `ScanService.request` as its
+owner — the same checks as an interactive request.
 
 Worker defaults (implemented): JSON-only serialization (no pickle), soft/hard time
 limits, late acknowledgement with reject-on-worker-lost, prefetch multiplier of 1.
@@ -171,7 +214,7 @@ thread-pool exhaustion. SQLAlchemy 2 typing integrates with mypy strict.
 **Rationale:** mature retry/time-limit/acknowledgement semantics, well-understood
 operations. Redis is already required for caching and rate limiting.
 **Trade-off:** Redis is not a durable queue; job state is persisted in PostgreSQL
-(Phase 4) so a Redis loss never loses the record of a scan.
+(since Phase 4) so a Redis loss never loses the record of a scan.
 
 ### ADR-005 — Same-origin frontend, CORS off by default
 **Decision:** the SPA reaches the API through `/api` on its own origin (Vite proxy
@@ -179,20 +222,91 @@ in development, Nginx in containers).
 **Rationale:** allows `SameSite=strict` HttpOnly cookies for the refresh token in
 Phase 2, removes a whole class of CORS misconfiguration risk.
 
-### ADR-006 — Scanner execution in dedicated sandboxes _(planned, Phase 4)_
-**Decision:** workers never run Nmap/ZAP/Nuclei in-process. Each scan runs in a
-short-lived, non-root container with a read-only filesystem, dropped
-capabilities (only what the scan profile needs, e.g. `NET_RAW` for SYN scans if
-ever enabled), CPU/memory/time limits, no access to application secrets or the
-`backend` network, and egress limited to the resolved, authorized target IPs.
+### ADR-006 — Scanner execution in a dedicated sandbox _(implemented, Phase 4)_
+**Decision:** the orchestrator worker never runs scanners. A separate `scanner`
+service (own image, own Celery app, `scans` queue only) executes scans as a
+non-root user with no capabilities (Nmap uses TCP connect scans), a read-only
+filesystem, CPU/memory/PID limits and no database URL or signing secret. Its
+worker process is recycled after every task. It re-evaluates scope itself and
+receives only pinned IPs.
 **Rationale:** scanner binaries parse hostile input; compromise of a scanner must
-not reach the database, Redis or credentials.
+not reach the database or credentials.
+**Revised from the original proposal (one container per scan):** launching
+containers per job requires giving the orchestrator the Docker socket, which is
+root-equivalent on the host — a worse risk than the one it removes. The
+long-lived sandbox with per-task process recycling keeps that privilege out of
+the platform. **Remaining gaps:** the sandbox reaches Redis over `backend` (it
+needs the broker; a per-service Redis ACL is recommended) and egress to private
+ranges is blocked in-process by the scope engine, not yet by a network firewall
+(see [DEPLOYMENT.md](DEPLOYMENT.md)). Kubernetes Jobs or gVisor are the natural
+next step for per-scan isolation.
 
-### ADR-007 — AI is optional, advisory and isolated _(planned, Phase 9)_
+### ADR-008 — Egress guard for tools that resolve names themselves _(Phase 5)_
+**Decision:** ZAP and Nuclei never connect to targets directly. Each scan starts an
+in-process forward proxy that only admits the authorized `host:port`, connects to
+the addresses pinned by the execution-time scope decision, and never resolves DNS.
+ZAP is additionally placed on an internal-only network so the proxy is its only
+route out.
+**Rationale:** both tools follow links and redirects and resolve names on their
+own; configuring their "scope" features alone would leave DNS rebinding and
+out-of-scope redirects to the tools' correctness. A proxy we own makes the
+scope decision the single point of enforcement and produces an auditable list of
+refused destinations.
+**Trade-off:** HTTPS is tunnelled (no interception), so the guard decides on
+`host:port` only, not on URL paths; path scoping is left to the ZAP context and
+Nuclei target. Nuclei shares the scanner's network, so for it the guard is
+enforced by configuration rather than by network isolation.
+
+### ADR-009 — Product-driven threat-intelligence sync _(Phase 6)_
+**Decision:** SentinelX does not mirror the NVD. When a scan observes a versioned
+product with a known CPE mapping, its `vendor:product` is registered and the intel
+worker fetches that product's CVEs (`virtualMatchString`), refreshing them after a
+TTL; the KEV catalog is applied daily. Correlation runs against the local store at
+scan time and again whenever a product refresh lands.
+**Rationale:** a full mirror is ~250k CVEs and, without an API key, days of
+rate-limited requests; most of it is irrelevant to the assets under test. Pulling
+only observed products keeps the first useful result minutes away and the
+database small.
+**Trade-off:** CVEs for products never observed are not searchable locally; an
+administrator can queue any `vendor:product` explicitly. CVE findings are always
+`tentative`: banners can be wrong and distributions backport fixes.
+
+### ADR-010 — Deterministic, explainable risk scoring _(Phase 7)_
+**Decision:** risk is a transparent formula (CVSS or severity base, multiplied by
+confidence and asset context, plus KEV, EPSS and age points), versioned in code,
+with admin-tunable bounded weights; every score stores its factor breakdown and a
+plain-language explanation. Details in [RISK_MODEL.md](RISK_MODEL.md).
+**Rationale:** analysts and auditors must be able to reproduce and challenge a
+ranking. A learned model would be harder to validate, drift silently and could not
+explain itself.
+**Trade-off:** the formula is coarse by design; environment-specific mitigations
+are captured through triage and asset context rather than hidden adjustments.
+
+### ADR-011 — Transactional outbox for alerts _(Phase 8)_
+
+**Decision:** events and their notifications are written in the transaction of
+the triggering change; a dedicated `notifier` worker with its own egress network
+delivers them. **Why:** no lost or phantom alerts (an event exists only if the
+change committed), retries survive restarts, and the only containers that talk to
+SMTP relays or webhook endpoints hold no scanner duties. Webhook destinations are
+treated like scan targets: resolved per delivery, policy-checked, pinned.
+**Trade-off:** up to ~30 s delivery latency; acceptable for security alerting.
+
+### ADR-007 — AI is optional, advisory and isolated _(implemented, Phase 9)_
 **Decision:** AI features sit behind a provider interface; the platform is fully
 functional without an API key. AI receives minimized, delimited, untrusted-labeled
 inputs, has no tool execution, and every response is schema-validated and stored
 with prompt version, model and token usage.
+
+**Implementation.** `app/ai/` holds the output schema, versioned prompts, the
+context builder (minimization, pseudonymization, redaction, untrusted labels), the
+validator (references, claim bases, CVE identifiers) and the deterministic
+fallback. The API builds the context, reuses identical recent results and checks
+the budget; the `ai` worker — the only container with the API key, on its own
+`ai-egress` network — calls Claude through the official SDK with structured
+outputs and a server-side refusal fallback, then validates and stores the result.
+Any failure produces the deterministic analysis with a recorded reason, so callers
+never see a provider error.
 
 ## 9. Deviations from the master plan
 
@@ -201,3 +315,5 @@ with prompt version, model and token usage.
 | `apps/api/app/models/` holds the base | Declarative base in `app/db/base.py`; domain models will live in `app/models/` | Separates persistence plumbing from domain models |
 | Root `tests/e2e/` | Playwright suite in `apps/web/tests/e2e/` | Shares the web toolchain, lockfile and TS config |
 | Top-level engine folders created up front | Created when their phase starts | Avoid empty placeholder packages |
+| Top-level `ai-engine/` package | `apps/api/app/ai/` | Shares models and sessions with the API; the provider runs only in the `ai` worker |
+| Reports rendered by a sandboxed HTML-to-PDF engine (Phase 10 proposal) | ReportLab drawing API, content escaped | No HTML/CSS engine means no resource fetching (SSRF, `file://`) to sandbox; one less attack surface |

@@ -38,6 +38,7 @@ class Permission(StrEnum):
     FINDINGS_WRITE = "findings:write"
     INTELLIGENCE_READ = "intelligence:read"
     EVENTS_READ = "events:read"
+    ALERTS_MANAGE = "alerts:manage"
     REPORTS_READ = "reports:read"
     REPORTS_GENERATE = "reports:generate"
     AI_USE = "ai:use"
@@ -60,6 +61,7 @@ PERMISSION_DESCRIPTIONS: MappingProxyType[Permission, str] = MappingProxyType(
         Permission.FINDINGS_WRITE: "Triage findings and change their lifecycle status",
         Permission.INTELLIGENCE_READ: "Query threat intelligence",
         Permission.EVENTS_READ: "View security events",
+        Permission.ALERTS_MANAGE: "Manage alert rules and notification channels",
         Permission.REPORTS_READ: "View and download reports",
         Permission.REPORTS_GENERATE: "Generate reports",
         Permission.AI_USE: "Request AI-assisted analysis",
@@ -93,6 +95,7 @@ _ANALYST = _VIEWER | {
     Permission.ASSETS_WRITE,
     Permission.SCANS_EXECUTE,
     Permission.FINDINGS_WRITE,
+    Permission.ALERTS_MANAGE,
     Permission.REPORTS_GENERATE,
     Permission.AI_USE,
 }

@@ -19,7 +19,7 @@ from app.repositories.sql import LIKE_ESCAPE, contains_pattern
 from app.schemas.pagination import PageParams
 
 
-def _scoped(stmt: Select[Project], principal: Principal) -> Select[Project]:
+def scope_to_principal(stmt: Select[Project], principal: Principal) -> Select[Project]:
     if principal.is_admin:
         return stmt
     membership = exists().where(
@@ -33,13 +33,13 @@ class ProjectRepository:
         self._session = session
 
     async def get_for(self, project_id: uuid.UUID, principal: Principal) -> Project | None:
-        stmt = _scoped(select(Project).where(Project.id == project_id), principal)
+        stmt = scope_to_principal(select(Project).where(Project.id == project_id), principal)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def list_for(
         self, principal: Principal, params: PageParams, *, search: str | None = None
     ) -> tuple[Sequence[Project], int]:
-        stmt = _scoped(select(Project), principal)
+        stmt = scope_to_principal(select(Project), principal)
         if search:
             stmt = stmt.where(
                 func.lower(Project.name).like(contains_pattern(search), escape=LIKE_ESCAPE)

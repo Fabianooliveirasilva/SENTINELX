@@ -21,9 +21,11 @@ describe("routes", () => {
     signInAs("admin");
     mockFetch(jsonResponse(readiness));
 
-    renderRoutes(routes, "/");
+    renderRoutes(routes, "/system-status");
 
     const nav = screen.getByRole("navigation", { name: "Primary" });
+    expect(nav).toHaveTextContent("Dashboard");
+    expect(nav).toHaveTextContent("System Status");
     expect(nav).toHaveTextContent("Users & Roles");
     expect(nav).toHaveTextContent("Audit Logs");
     expect(await screen.findByText("No components reported.")).toBeInTheDocument();
@@ -33,7 +35,7 @@ describe("routes", () => {
     signInAs("viewer", ["projects:read"]);
     mockFetch(jsonResponse(readiness));
 
-    renderRoutes(routes, "/");
+    renderRoutes(routes, "/system-status");
 
     const nav = screen.getByRole("navigation", { name: "Primary" });
     expect(nav).toHaveTextContent("Projects");

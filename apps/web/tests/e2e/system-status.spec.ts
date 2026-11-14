@@ -8,6 +8,7 @@ import { ADMIN_EMAIL, ADMIN_PASSWORD, signIn } from "./helpers";
  */
 test("system status page reflects real backend readiness", async ({ page }) => {
   await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+  await page.getByRole("link", { name: "System Status" }).click();
 
   await expect(page.getByRole("heading", { name: "System Status" })).toBeVisible();
   const overall = page.getByTestId("overall-status");

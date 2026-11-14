@@ -167,6 +167,38 @@ export async function apiRequest<T>(
   return parsed.data;
 }
 
+export interface Download {
+  blob: Blob;
+  filename: string;
+  sha256: string | null;
+}
+
+/** Fetch a binary attachment (reports) with the same auth and error handling. */
+export async function apiDownload(path: string): Promise<Download> {
+  const options: RequestOptions = { headers: { Accept: "*/*" } };
+  let response = await send(path, options);
+  if (response.status === 401 && authHandler) {
+    if (await authHandler.refresh()) response = await send(path, options);
+  }
+  if (!response.ok) {
+    const requestId = response.headers.get("X-Request-ID");
+    const envelope = errorEnvelopeSchema.safeParse(await readJson(response));
+    throw new ApiError({
+      status: response.status,
+      code: envelope.success ? envelope.data.error.code : "http_error",
+      message: envelope.success ? envelope.data.error.message : `Request failed with status ${response.status}.`,
+      requestId: envelope.success ? (envelope.data.error.request_id ?? requestId) : requestId,
+    });
+  }
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const match = /filename="([^"]+)"/.exec(disposition);
+  return {
+    blob: await response.blob(),
+    filename: match?.[1] ?? "report",
+    sha256: response.headers.get("X-Content-SHA256"),
+  };
+}
+
 /** Schema for endpoints that return 204 No Content. */
 export const noContent = z.null();
 

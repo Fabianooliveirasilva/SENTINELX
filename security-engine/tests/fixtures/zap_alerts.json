@@ -1,0 +1,7 @@
+{"alerts": [
+ {"pluginId": "10038", "alertRef": "10038-1", "name": "Content Security Policy (CSP) Header Not Set", "risk": "Medium", "confidence": "High", "cweid": "693", "wascid": "15", "url": "https://app.example.com/", "method": "GET", "param": "", "evidence": "", "attack": "", "description": "CSP is an added layer of security.", "solution": "Set the Content-Security-Policy header.", "reference": "https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP\nhttps://owasp.org/csp"},
+ {"pluginId": "10038", "alertRef": "10038-1", "name": "Content Security Policy (CSP) Header Not Set", "risk": "Medium", "confidence": "High", "cweid": "693", "url": "https://app.example.com/login", "method": "GET"},
+ {"pluginId": "10202", "alertRef": "10202", "name": "Absence of Anti-CSRF Tokens", "risk": "Low", "confidence": "Low", "cweid": "352", "url": "https://app.example.com/login", "method": "GET", "evidence": "<form action=\"/login\">"},
+ {"pluginId": "40012", "alertRef": "40012", "name": "Cross Site Scripting (Reflected)", "risk": "High", "confidence": "Medium", "cweid": "79", "url": "https://app.example.com/search?q=x", "param": "q", "attack": "<script>alert(1)</script>"},
+ {"pluginId": "10021", "alertRef": "10021", "name": "X-Content-Type-Options Header Missing", "risk": "Low", "confidence": "False Positive", "cweid": "693", "url": "https://app.example.com/"}
+]}

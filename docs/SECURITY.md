@@ -25,10 +25,13 @@ The threat analysis behind these controls is in [THREAT_MODEL.md](THREAT_MODEL.m
 | Argon2id, rotating refresh tokens with reuse detection, RBAC, CSRF, lockout, rate limiting, append-only audit log | Implemented | [AUTHENTICATION.md](AUTHENTICATION.md) |
 | Tenant isolation (project-scoped queries, 404 for foreign resources) | Implemented | `app/repositories/projects.py` |
 | Trusted proxy configuration (client IP from Nginx only) | Implemented | `docker-compose.yml` (`FORWARDED_ALLOW_IPS`) |
-| Multi-factor authentication, production email backend | Planned | Phase 12 |
+| Production e-mail backend (SMTP with STARTTLS/TLS and verified certificates) | Implemented | `app/services/email.py` |
+| Alert webhooks: SSRF-safe delivery (per-delivery policy check, IP pinning, no redirects), HMAC signatures, encrypted secrets | Implemented | `app/services/notifications.py`, [THREAT_MODEL.md](THREAT_MODEL.md) T28–T29 |
+| Report integrity and injection safety (escaped PDF content, SHA-256, audited downloads) | Implemented | `app/reports/`, [THREAT_MODEL.md](THREAT_MODEL.md) T33 |
+| Multi-factor authentication | Planned | Phase 12 |
 | SSRF/scope enforcement, DNS rebinding and redirect defenses | Implemented | [SCANNING_POLICY.md](SCANNING_POLICY.md), `security-engine/` |
-| Scanner sandboxing and egress restriction | Planned | Phase 4 |
-| AI prompt-injection defenses and data minimization | Planned | Phase 9 |
+| Scanner sandboxing and egress restriction | Implemented | Phases 4–5 |
+| AI prompt-injection defenses, data minimization (pseudonymization, redaction), output validation, budgets | Implemented | `app/ai/`, [THREAT_MODEL.md](THREAT_MODEL.md) T7, T21, T22, T32 |
 
 ## Quality gates (CI)
 

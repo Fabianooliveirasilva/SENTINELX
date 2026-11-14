@@ -84,7 +84,38 @@ class Settings(BaseSettings):
     # local development too. Only disable for non-browser test clients.
     cookie_secure: bool = True
     frontend_base_url: str = "http://localhost:8080"
-    email_backend: Literal["console", "disabled"] = "console"
+    email_backend: Literal["console", "smtp", "disabled"] = "console"
+    email_from: str = "SentinelX <no-reply@sentinelx.example.com>"
+    smtp_host: str | None = None
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    # "starttls" upgrades a plain connection; "tls" is implicit TLS (port 465).
+    smtp_security: Literal["starttls", "tls"] = "starttls"
+    smtp_timeout_seconds: float = Field(default=15.0, gt=0, le=120)
+
+    # --- AI analyst (optional) ------------------------------------------------------
+    # "disabled" keeps every analysis deterministic. The API key is only given to
+    # the `ai` worker container; the API needs just the provider switch.
+    ai_provider: Literal["anthropic", "disabled"] = "disabled"
+    anthropic_api_key: SecretStr | None = None
+    ai_model: str = Field(default="claude-opus-5-5", pattern=r"^[a-z0-9][a-z0-9.\-]{2,63}$")
+    ai_effort: Literal["low", "medium", "high"] = "medium"
+    ai_max_output_tokens: int = Field(default=12_000, ge=1_024, le=64_000)
+    ai_timeout_seconds: float = Field(default=120.0, gt=0, le=240)
+    ai_daily_token_budget_per_project: int = Field(default=300_000, ge=0, le=50_000_000)
+    ai_result_reuse_hours: int = Field(default=24, ge=0, le=720)
+    # USD per million tokens, for cost estimates only (defaults: Claude Opus 5.5).
+    ai_input_price_per_mtok: float = Field(default=4.0, ge=0)
+    ai_output_price_per_mtok: float = Field(default=20.0, ge=0)
+
+    # --- Monitoring & notifications ---------------------------------------------
+    webhook_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    notification_max_attempts: int = Field(default=6, ge=1, le=20)
+    notification_batch_size: int = Field(default=50, ge=1, le=500)
+    # Webhooks may target private addresses only inside these networks (e.g. an
+    # internal chat server). Loopback, link-local and metadata stay blocked.
+    webhook_allowed_networks: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
     # --- Scope enforcement ------------------------------------------------------
     # Private networks / internal domains of intentionally vulnerable labs that may
@@ -94,6 +125,32 @@ class Settings(BaseSettings):
     dns_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
     dns_nameservers: Annotated[list[str], NoDecode] = Field(default_factory=list)
     max_authorization_days: int = Field(default=366, ge=1, le=3660)
+
+    # --- Scans ------------------------------------------------------------------
+    max_concurrent_scans_per_project: int = Field(default=3, ge=1, le=50)
+    max_daily_scans_per_project: int = Field(default=50, ge=1, le=10_000)
+    scan_timeout_seconds: int = Field(default=240, ge=10, le=3000)
+    # ZAP spiders and (optionally) attacks a whole application: it gets its own budget.
+    zap_scan_timeout_seconds: int = Field(default=900, ge=60, le=7200)
+    scan_queue_timeout_seconds: int = Field(default=1800, ge=60, le=24 * 3600)
+
+    def scan_timeout_for(self, scanner: str) -> int:
+        return self.zap_scan_timeout_seconds if scanner == "zap" else self.scan_timeout_seconds
+
+    @property
+    def max_scan_timeout_seconds(self) -> int:
+        return max(self.scan_timeout_seconds, self.zap_scan_timeout_seconds)
+
+    # --- Threat intelligence ------------------------------------------------------
+    intel_enabled: bool = True
+    nvd_api_key: SecretStr | None = None
+    nvd_base_url: str = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+    kev_url: str = (
+        "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+    )
+    epss_url: str = "https://api.first.org/data/v1/epss"
+    intel_product_ttl_hours: int = Field(default=24, ge=1, le=24 * 30)
+    intel_max_products_per_run: int = Field(default=20, ge=1, le=500)
 
     # --- Rate limits (requests per window) --------------------------------------
     rate_limit_login_per_minute: int = Field(default=10, ge=1)
@@ -110,6 +167,7 @@ class Settings(BaseSettings):
         "scope_lab_networks",
         "scope_lab_domains",
         "dns_nameservers",
+        "webhook_allowed_networks",
         mode="before",
     )
     @classmethod
@@ -138,7 +196,7 @@ class Settings(BaseSettings):
             raise ValueError("wildcard '*' is not permitted in allowed_hosts")
         return hosts
 
-    @field_validator("scope_lab_networks")
+    @field_validator("scope_lab_networks", "webhook_allowed_networks")
     @classmethod
     def _validate_lab_networks(cls, values: list[str]) -> list[str]:
         return [str(network) for network in parse_lab_networks(values)]
@@ -158,6 +216,19 @@ class Settings(BaseSettings):
             return [parse_ip(v).compressed for v in values]
         except TargetError as exc:
             raise ValueError("dns_nameservers must be IP addresses") from exc
+
+    @field_validator("nvd_api_key", mode="before")
+    @classmethod
+    def _empty_key_is_none(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator("nvd_base_url", "kev_url", "epss_url")
+    @classmethod
+    def _validate_intel_urls(cls, value: str) -> str:
+        parts = urlsplit(value)
+        if parts.scheme != "https" or not parts.netloc:
+            raise ValueError("intelligence feed URLs must be absolute https URLs")
+        return value
 
     @field_validator("frontend_base_url")
     @classmethod
@@ -199,6 +270,12 @@ class Settings(BaseSettings):
             raise ValueError("the console email backend is not permitted in production")
         if self.argon2_memory_cost_kib < 19456 or self.argon2_time_cost < 2:
             raise ValueError("Argon2id parameters are below the OWASP minimum for production")
+        return self
+
+    @model_validator(mode="after")
+    def _require_smtp_host(self) -> Settings:
+        if self.email_backend == "smtp" and not self.smtp_host:
+            raise ValueError("smtp_host is required when email_backend is 'smtp'")
         return self
 
     # ------------------------------------------------------------------ derived
