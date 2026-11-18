@@ -26,7 +26,7 @@ dev = [
     "pip-audit>=2.10.1",
     "fakeredis>=2.40.0",
     "types-defusedxml>=0.7.0",
-    "types-reportlab>=4.4,<5",
+    "types-reportlab>=5.1.0.20261104,<6",
     "types-pyyaml>=6.0.12.20261113",
     "pyyaml>=6",
 ]
