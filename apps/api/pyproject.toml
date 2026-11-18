@@ -21,7 +21,7 @@ dependencies = [
     "sentinelx-security",
     "celery[redis]>=5.7.0,<5.8",
     "cryptography>=50.0.2,<51",
-    "anthropic>=1,<2",
+    "anthropic>=2.8.0,<3",
     "reportlab>=4.4,<5",
     "prometheus-client>=0.21",
 ]
