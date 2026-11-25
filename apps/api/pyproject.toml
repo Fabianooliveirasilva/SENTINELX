@@ -5,7 +5,7 @@ description = "SentinelX REST API (FastAPI modular monolith)."
 requires-python = ">=3.12,<3.13"
 license = "MIT"
 dependencies = [
-    "fastapi>=0.162.4,<0.163",
+    "fastapi>=0.165.0,<0.166",
     "uvicorn[standard]>=0.54.0,<0.55",
     "pydantic>=2.14.3,<3",
     "pydantic-settings>=2.16.2,<3",
